@@ -283,31 +283,42 @@ cell expand(const cell &c)
 	
 	}
 	else if (c.list[0].val == "define") {
-		assert(c.list.size() < 3);
+		assert(c.list.size() >= 3);
 		cell v(c.list[1]);
 		cell body(c.list[2]);
 		if (v.type == List) {
 			cell cc;
-			cc.list.push_back(define_sym);;
-			cc.list.push_back(v.list[0]);
-			cell ccc(List);
-			cc.list.push_back(lambda_sym);
+			cc.list.push_back(define_sym); // define
+			cc.list.push_back(v.list[0]); // name
+			cell ccc(List); // lambda args body
+			ccc.list.push_back(lambda_sym);
+			cell cccc(List); 
 			cellit it = v.list.begin() + 1;
 			for (; it != v.list.end(); it++) {
-				cc.list.push_back(*it);
+				cccc.list.push_back(*it);
 			}
-			
-			cc.list.push_back()
+			ccc.list.push_back(cccc);
+			ccc.list.push_back(body);
+			cc.list.push_back(ccc);
+			return expand(cc);
 		}
 		else {
-		
+			cell cc = expand(c.list[2]);
+			cell ret;
+			ret.list.push_back(define_sym);
+			ret.list.push_back(v);
+			ret.list.push_back(cc);
+			return ret;
 		}
 	}
 	else if (c.list[0].val == "begin") {
 	
 	}
 	else if (c.list[0].val == "lambda") {
-	
+		assert(c.list.size() >= 3);
+		cell vars(c.list[1]);
+		cell body(c.list[2]);
+
 	}
 	else {
 	
@@ -373,8 +384,7 @@ cell read2(const std::string &s)
 {
 	std::list<std::string> tokens(tokenize(s));
 	cell c = read_from(tokens);
-
-	return c;
+	return expand(c);
 }
 
 // convert given cell to a Lisp-readable string
