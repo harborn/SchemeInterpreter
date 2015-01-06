@@ -267,6 +267,21 @@ cell eval(cell x, environment * env)
 	exit(1);
 }
 
+// print cell
+void printCell(const cell &c)
+{
+	if (c.type == Symbol || c.type == Number) {
+		std::cout << c.val << " ";
+	}
+	else if (c.type == List) {
+		std::cout << "(";
+		for (cellit it = c.list.begin(); it != c.list.end(); it++) {
+			printCell(*it);
+		}
+		std::cout << ")";
+	}
+}
+
 // expand define 
 cell expand(const cell &c)
 {
@@ -307,13 +322,14 @@ cell expand(const cell &c)
 			cc.list.push_back(v.list[0]); // name
 			cell ccc(List); // lambda args body
 			ccc.list.push_back(lambda_sym);
-			cell cccc(List);
-			cellit it = v.list.begin() + 1;
-			for (; it != v.list.end(); it++) {
-				cccc.list.push_back(*it);
+			cell args(List);
+			for (cellit it = v.list.begin() + 1; it != v.list.end(); it++) {
+				args.list.push_back(*it);
 			}
-			ccc.list.push_back(cccc);
-			ccc.list.push_back(body);
+			ccc.list.push_back(args);
+			for (cellit it = c.list.begin() + 2; it != c.list.end(); it++) {
+				ccc.list.push_back(*it);
+			}
 			cc.list.push_back(ccc);
 			return expand(cc);
 		}
@@ -321,7 +337,7 @@ cell expand(const cell &c)
 			cell cc = expand(c.list[2]);
 			cell ret(List);
 			ret.list.push_back(define_sym);
-			ret.list.push_back(v);
+			ret.list.push_back(c.list[1]);
 			ret.list.push_back(cc);
 			return ret;
 		}
@@ -335,15 +351,22 @@ cell expand(const cell &c)
 		}
 		return ret;
 	}
-	else if (c.list[0].val == "lambda") {	// (lambda (x) e1 e2)
-		assert(c.list.size() >= 3);			// => (lambda (x) (begin e1 e2))		
+	else if (c.list[0].val == "lambda") {	// (lambda (x) e) or (lambda (x) e1 e2)
+		assert(c.list.size() >= 3);			
 		cell ret(List);
 		ret.list.push_back(c.list[0]);
 		ret.list.push_back(c.list[1]);
 		cell exp(List);
-		if (c.list[2].list.size() > 1) exp.list.push_back(begin_sym);
-		for (cellit it = c.list[2].list.begin(); it != c.list[2].list.end(); it++) {
-			exp.list.push_back(*it);
+		if (c.list.size() > 3) {			// => (lambda (x) (begin e1 e2))
+			exp.list.push_back(begin_sym);
+			for (cellit it = c.list.begin() + 2; it != c.list.end(); it++) {
+				exp.list.push_back(*it);
+			}
+		}
+		else {								// => (lambda (x) e)
+			for (cellit it = c.list[2].list.begin(); it != c.list[2].list.end(); it++) {
+				exp.list.push_back(*it);
+			}
 		}
 		ret.list.push_back(expand(exp));
 		return ret;
@@ -378,20 +401,6 @@ std::list<std::string> tokenize(const std::string & str)
 		}
 	}
 	return tokens;
-}
-
-void printCell(const cell &c)
-{
-	if (c.type == Symbol || c.type == Number) {
-		std::cout << c.val << " ";
-	}
-	else if (c.type == List) {
-		std::cout << "(";
-		for (cellit it = c.list.begin(); it != c.list.end(); it++) {
-			printCell(*it);
-		}
-		std::cout << ")";
-	}
 }
 
 // numbers become Numbers; every other token is a Symbol
@@ -435,7 +444,6 @@ cell read2(const std::string &s)
 	return c;
 }
 
-
 // convert given cell to a Lisp-readable string
 std::string to_string(const cell & exp)
 {
@@ -471,12 +479,20 @@ int main()
 	//repl("90> ", &global_env);
 
 	std::string exps[] = {
-		//"(define x 10)",
+		"(define x 10)",
+		"(define (foo) (define x 4) x)",
+		"(define (bar) (set! x 4) x)",
+		"(define y (list 1 2 3 4 5 6))",
+		"(define greeted nil)",
+		//"(define (greet name) (set!greeted(cons name greeted)) (string - append \"Hello, \" name))",
 		//"(define (add x y) (+ x y))",
+		"(define add (lambda (x y) (+ x y)))",
 		//"(define (fib n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))",
 		"(define (double4 x) (define (double2 x) (+ x x)) (+ (double2 x) (double2 x)))",
 		//"(define double4 (lambda (x) (+ (double2 x) (double2 x))))",
 		//"(define double4 (lambda (x) (begin (define double2 (lambda (x) (+ x x))) (+ (double2 x) (double2 x)))))",
+		//"(define (fib n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2)))))",
+		"(define (fib n) (define (fib-kernal n1 n2 f1 f2) (if (< n1 n2) (fib-kernal (+ n1 1) n2 (+ f1 f2) f1) f2)) (fib-kernal 0 n 1 0))",
 	};
 	int en = sizeof(exps) / sizeof(exps[0]);
 	
@@ -485,11 +501,19 @@ int main()
 	}
 
 	std::string evas[] = {
-		//"(add 3 4)",
-		//"(fib 10)",
+		"(foo)",
+		"x",
+		"(bar)",
+		"x",
+		"(add 3 4 5 6 7 8)",
 		"(double4 10)",
+		"(fib x)",
 		//"(if (> 3 4) 0)",
 		//"(if (> 3 4) 0 1)",
+		"(greet \"Athos\")",
+		"(greet \"Porthos\")",
+		"(greet \"Aramis\")",
+		"greeted",
 	};
 
 	int vn = sizeof(evas) / sizeof(evas[0]);
