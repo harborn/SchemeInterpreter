@@ -1,4 +1,3 @@
-
 // Scheme Interpreter in 90 lines of C++ (not counting lines after the first 90).
 // Inspired by Peter Norvig's Lis.py.
 
@@ -29,14 +28,14 @@ struct environment; // forward declaration; cell and environment reference each 
 
 // a variant that can hold any kind of lisp value
 struct cell {
-	typedef cell (*proc_type)(const std::vector<cell> &);
+	typedef cell(*proc_type)(const std::vector<cell> &);
 	typedef std::vector<cell>::const_iterator iter;
 	typedef std::map<std::string, cell> map;
-	cell_type type; 
-	std::string val; 
-	std::vector<cell> list; 
-	proc_type proc; 
-	environment * env; 
+	cell_type type;
+	std::string val;
+	std::vector<cell> list;
+	proc_type proc;
+	environment * env;
 	cell(cell_type type = Symbol) : type(type), env(0) {}
 	cell(cell_type type, const std::string & val) : type(type), val(val), env(0) {}
 	cell(proc_type proc) : type(Proc), proc(proc), env(0) {}
@@ -209,6 +208,7 @@ void add_globals(environment & env)
 	env["/"] = cell(&proc_div);				env[">"] = cell(&proc_greater);
 	env["<"] = cell(&proc_less);			env["<="] = cell(&proc_less_equal);
 	env["="] = cell(&proc_equal);			env["nil"] = nil;
+	env[""] = cell();
 }
 
 
@@ -274,25 +274,40 @@ cell expand(const cell &c)
 		return cell(c);
 	}
 	else if (c.list[0].val == "quote") {
-	
-	} 
-	else if (c.list[0].val == "if") {
-	
+		assert(c.list.size() == 2);
+		return cell(c);
 	}
-	else if (c.list[0].val == "set!") {
-	
+	else if (c.list[0].val == "if") {	
+		cell cc(c);
+		if (cc.list.size() == 3)		// (if t c) => (if t c None)
+			cc.list.push_back(cell());
+		assert(cc.list.size() == 4);
+		cell ret(List);
+		for (cellit it = cc.list.begin(); it != cc.list.end(); it++) {
+			ret.list.push_back(expand(*it));
+		}
+		return ret;
+	}
+	else if (c.list[0].val == "set!") {			// (set! non-var exp) => Error
+		assert(c.list.size() == 3);
+		assert(c.list[1].type == Symbol);
+		cell ret(List);
+		ret.list.push_back(set_sym);
+		ret.list.push_back(c.list[1]);
+		ret.list.push_back(expand(c.list[2]));
+		return ret;
 	}
 	else if (c.list[0].val == "define") {
 		assert(c.list.size() >= 3);
 		cell v(c.list[1]);
 		cell body(c.list[2]);
 		if (v.type == List) {
-			cell cc;
+			cell cc(List);
 			cc.list.push_back(define_sym); // define
 			cc.list.push_back(v.list[0]); // name
 			cell ccc(List); // lambda args body
 			ccc.list.push_back(lambda_sym);
-			cell cccc(List); 
+			cell cccc(List);
 			cellit it = v.list.begin() + 1;
 			for (; it != v.list.end(); it++) {
 				cccc.list.push_back(*it);
@@ -304,7 +319,7 @@ cell expand(const cell &c)
 		}
 		else {
 			cell cc = expand(c.list[2]);
-			cell ret;
+			cell ret(List);
 			ret.list.push_back(define_sym);
 			ret.list.push_back(v);
 			ret.list.push_back(cc);
@@ -312,18 +327,34 @@ cell expand(const cell &c)
 		}
 	}
 	else if (c.list[0].val == "begin") {
-	
+		if (c.list.size() == 1) return cell(); // (begin) => None
+		cell ret(List);
+		ret.list.push_back(begin_sym);
+		for (cellit it = c.list.begin() + 1; it != c.list.end(); it++) {
+			ret.list.push_back(expand(*it));
+		}
+		return ret;
 	}
-	else if (c.list[0].val == "lambda") {
-		assert(c.list.size() >= 3);
-		cell vars(c.list[1]);
-		cell body(c.list[2]);
-
+	else if (c.list[0].val == "lambda") {	// (lambda (x) e1 e2)
+		assert(c.list.size() >= 3);			// => (lambda (x) (begin e1 e2))		
+		cell ret(List);
+		ret.list.push_back(c.list[0]);
+		ret.list.push_back(c.list[1]);
+		cell exp(List);
+		if (c.list[2].list.size() > 1) exp.list.push_back(begin_sym);
+		for (cellit it = c.list[2].list.begin(); it != c.list[2].list.end(); it++) {
+			exp.list.push_back(*it);
+		}
+		ret.list.push_back(expand(exp));
+		return ret;
 	}
 	else {
-	
+		cell ret(List);
+		for (cellit it = c.list.begin(); it != c.list.end(); it++) {
+			ret.list.push_back(expand(*it));
+		}
+		return ret;
 	}
-	return cell(c);
 }
 
 ////////////////////// parse, read and user interaction
@@ -347,6 +378,20 @@ std::list<std::string> tokenize(const std::string & str)
 		}
 	}
 	return tokens;
+}
+
+void printCell(const cell &c)
+{
+	if (c.type == Symbol || c.type == Number) {
+		std::cout << c.val << " ";
+	}
+	else if (c.type == List) {
+		std::cout << "(";
+		for (cellit it = c.list.begin(); it != c.list.end(); it++) {
+			printCell(*it);
+		}
+		std::cout << ")";
+	}
 }
 
 // numbers become Numbers; every other token is a Symbol
@@ -383,9 +428,13 @@ cell read(const std::string & s)
 cell read2(const std::string &s)
 {
 	std::list<std::string> tokens(tokenize(s));
-	cell c = read_from(tokens);
-	return expand(c);
+	cell c = expand(read_from(tokens));
+	std::cout << "\n";
+	printCell(c);
+	std::cout << "\n";
+	return c;
 }
+
 
 // convert given cell to a Lisp-readable string
 std::string to_string(const cell & exp)
@@ -417,13 +466,37 @@ void repl(const std::string & prompt, environment * env)
 
 int main()
 {
-	environment global_env; 
+	environment global_env;
 	add_globals(global_env);
 	//repl("90> ", &global_env);
 
-	std::cout << to_string(eval(read2("(define (add x y) (+ x y))"), &global_env)) << std::endl;
-	//std::cout << to_string(eval(read("(define add (lambda (x y) (+ x y)))"), &global_env)) << std::endl;
-	std::cout << to_string(eval(read("(add 3 4)"), &global_env)) << std::endl;
+	std::string exps[] = {
+		//"(define x 10)",
+		//"(define (add x y) (+ x y))",
+		//"(define (fib n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))",
+		"(define (double4 x) (define (double2 x) (+ x x)) (+ (double2 x) (double2 x)))",
+		//"(define double4 (lambda (x) (+ (double2 x) (double2 x))))",
+		//"(define double4 (lambda (x) (begin (define double2 (lambda (x) (+ x x))) (+ (double2 x) (double2 x)))))",
+	};
+	int en = sizeof(exps) / sizeof(exps[0]);
+	
+	for (int i = 0; i < en; i++) {
+		std::cout << to_string(eval(read2(exps[i]), &global_env)) << std::endl;
+	}
+
+	std::string evas[] = {
+		//"(add 3 4)",
+		//"(fib 10)",
+		"(double4 10)",
+		//"(if (> 3 4) 0)",
+		//"(if (> 3 4) 0 1)",
+	};
+
+	int vn = sizeof(evas) / sizeof(evas[0]);
+
+	for (int i = 0; i < vn; i++) {
+		std::cout << to_string(eval(read2(evas[i]), &global_env)) << std::endl;
+	}
 
 	return 0;
 }
