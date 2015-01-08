@@ -131,7 +131,12 @@
 ((insertL-f eq?) 'd 'e '(a b c e f g d h))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; call/cc, Call-with-current-continuation
+(call/cc (lambda (throw) (+ 5 (* 10 (call/cc (lambda (escape) (* 100 (escape 3))))))))
+; 35, (+ 5 (* 10 3)) -> 35
+; 
+(call/cc (lambda (throw) (+ 5 (* 10 (call/cc (lambda (escape) (* 100 (throw 3))))))))
+; 3, (
 
 
 
