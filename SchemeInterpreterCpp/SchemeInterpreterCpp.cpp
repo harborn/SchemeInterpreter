@@ -196,6 +196,11 @@ cell proc_list(const cells & c)
 	return result;
 }
 
+cell proc_listp(const cells & c)
+{
+	return c[0].type == List ? true_sym : false_sym;
+}
+
 // define the bare minimum set of primintives necessary to pass the unit tests
 void add_globals(environment & env)
 {
@@ -208,7 +213,7 @@ void add_globals(environment & env)
 	env["/"] = cell(&proc_div);				env[">"] = cell(&proc_greater);
 	env["<"] = cell(&proc_less);			env["<="] = cell(&proc_less_equal);
 	env["="] = cell(&proc_equal);			env["nil"] = nil;
-	env[""] = cell();
+	env[""] = cell();						env["list?"] = cell(&proc_listp);
 }
 
 
@@ -423,6 +428,12 @@ cell read_from(std::list<std::string> & tokens)
 		tokens.pop_front();
 		return c;
 	}
+	else if (token[0] == '`' || token[0] == '\'') {
+		cell c(List);
+		c.list.push_back(quote_sym);
+		c.list.push_back(atom(token.substr(1, token.length() - 1)));
+		return c;
+	}
 	else
 		return atom(token);
 }
@@ -438,9 +449,9 @@ cell read2(const std::string &s)
 {
 	std::list<std::string> tokens(tokenize(s));
 	cell c = expand(read_from(tokens));
-	std::cout << "\n";
-	printCell(c);
-	std::cout << "\n";
+	//std::cout << "\n";
+	//printCell(c);
+	//std::cout << "\n";
 	return c;
 }
 
@@ -478,15 +489,27 @@ int main()
 	add_globals(global_env);
 	//repl("90> ", &global_env);
 
+	cell c = read("`hello");
+
 	std::string exps[] = {
+		"(quote ())",
+		"nil",
+		"(define l (list 3 4))",
+		"(list? 3)",
+		"(list? l)",
+		"(define str `hello)",
+		"(define str 'hello)",
+		"(define str (quote hello))",
 		"(define x 10)",
 		"(define (foo) (define x 4) x)",
 		"(define (bar) (set! x 4) x)",
 		"(define y (list 1 2 3 4 5 6))",
 		"(define greeted nil)",
+
 		//"(define (greet name) (set!greeted(cons name greeted)) (string - append \"Hello, \" name))",
 		//"(define (add x y) (+ x y))",
 		"(define add (lambda (x y) (+ x y)))",
+		"(define add2 add)",
 		//"(define (fib n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))",
 		"(define (double4 x) (define (double2 x) (+ x x)) (+ (double2 x) (double2 x)))",
 		//"(define double4 (lambda (x) (+ (double2 x) (double2 x))))",
@@ -497,6 +520,7 @@ int main()
 	int en = sizeof(exps) / sizeof(exps[0]);
 	
 	for (int i = 0; i < en; i++) {
+		std::cout << exps[i] << " => " << std::endl;
 		std::cout << to_string(eval(read2(exps[i]), &global_env)) << std::endl;
 	}
 
@@ -507,18 +531,16 @@ int main()
 		"x",
 		"(add 3 4 5 6 7 8)",
 		"(double4 10)",
+		"(add2 3 4)",
 		"(fib x)",
 		//"(if (> 3 4) 0)",
 		//"(if (> 3 4) 0 1)",
-		"(greet \"Athos\")",
-		"(greet \"Porthos\")",
-		"(greet \"Aramis\")",
-		"greeted",
 	};
 
 	int vn = sizeof(evas) / sizeof(evas[0]);
 
 	for (int i = 0; i < vn; i++) {
+		std::cout << evas[i] << " => " << std::endl;
 		std::cout << to_string(eval(read2(evas[i]), &global_env)) << std::endl;
 	}
 
