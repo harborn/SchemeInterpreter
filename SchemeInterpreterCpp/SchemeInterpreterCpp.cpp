@@ -13,8 +13,12 @@
 #include <map>
 #include <cassert>
 
+//cell eval(cell x, environment * env);
+
 // return given mumber as a string
 std::string str(long n) { std::ostringstream os; os << n; return os.str(); }
+//std::string str(int i) { std::ostringstream os; os << i; return os.str(); }
+//std::string str(double d) { std::ostringstream os; os << d; return os.str(); }
 
 // return true iff given character is '0'..'9'
 bool isdig(char c) { return isdigit(static_cast<unsigned char>(c)) != 0; }
@@ -25,6 +29,8 @@ bool isdig(char c) { return isdigit(static_cast<unsigned char>(c)) != 0; }
 enum cell_type { Symbol, Number, List, Proc, Lambda };
 
 struct environment; // forward declaration; cell and environment reference each other
+
+
 
 // a variant that can hold any kind of lisp value
 struct cell {
@@ -53,6 +59,7 @@ const cell if_sym(Symbol, "if");
 const cell begin_sym(Symbol, "begin");
 const cell quote_sym(Symbol, "quote");
 const cell set_sym(Symbol, "set!");
+const cell cond_sym(Symbol, "cond");
 
 ////////////////////// environment
 
@@ -94,6 +101,7 @@ private:
 	environment * outer_; // next adjacent outer env, or 0 if there are no further environments
 };
 
+environment global_env;
 
 ////////////////////// built-in primitive procedures
 
@@ -123,6 +131,13 @@ cell proc_div(const cells & c)
 	long n(atol(c[0].val.c_str()));
 	for (cellit i = c.begin() + 1; i != c.end(); ++i) n /= atol(i->val.c_str());
 	return cell(Number, str(n));
+}
+
+cell proc_sqrt(const cells & c)
+{
+	double d(atof(c[0].val.c_str()));
+	std::ostringstream os; os << sqrt(d);
+	return cell(Number, os.str());
 }
 
 cell proc_greater(const cells & c)
@@ -161,8 +176,20 @@ cell proc_equal(const cells & c)
 	return true_sym;
 }
 
+cell proc_is(const cells & c)
+{
+	return cell();
+}
+
+cell proc_display(const cells & c)
+{
+	return cell();
+}
+
 cell proc_length(const cells & c) { return cell(Number, str(c[0].list.size())); }
-cell proc_nullp(const cells & c)  { return c[0].list.empty() ? true_sym : false_sym; }
+cell proc_nullp(const cells & c)  {
+	return c[0].val == "" && c[0].list.empty() ? true_sym : false_sym;
+}
 cell proc_car(const cells & c)    { return c[0].list[0]; }
 
 cell proc_cdr(const cells & c)
@@ -201,6 +228,33 @@ cell proc_listp(const cells & c)
 	return c[0].type == List ? true_sym : false_sym;
 }
 
+cell proc_pairp(const cells & c)
+{
+	return (c[0].type == List && c[0].list.size() > 0) ? true_sym : false_sym;
+}
+
+cell proc_apply(const cells & c)
+{
+	return cell();
+}
+
+cell proc_callcc(const cells & c)
+{
+	return cell();
+}
+
+cell eval(cell x, environment * env);
+
+cell proc_eval(const cells & c)
+{
+	return eval(c[0], &global_env);
+}
+
+cell proc_emptyp(const cells & c)
+{
+	return c[0].type == List && c[0].list.empty() ? true_sym : false_sym;
+}
+
 // define the bare minimum set of primintives necessary to pass the unit tests
 void add_globals(environment & env)
 {
@@ -213,7 +267,11 @@ void add_globals(environment & env)
 	env["/"] = cell(&proc_div);				env[">"] = cell(&proc_greater);
 	env["<"] = cell(&proc_less);			env["<="] = cell(&proc_less_equal);
 	env["="] = cell(&proc_equal);			env["nil"] = nil;
+	env["equal?"] = cell(&proc_equal);		env["eq?"] = cell(&proc_is);
+	env["display"] = cell(&proc_display);	env["sqrt"] = cell(&proc_sqrt);
 	env[""] = cell();						env["list?"] = cell(&proc_listp);
+	env["pair?"] = cell(&proc_pairp);		env["apply"] = cell(&proc_apply);
+	env["callcc"] = cell(&proc_callcc);		env["eval"] = cell(&proc_eval);
 }
 
 
@@ -287,6 +345,28 @@ void printCell(const cell &c)
 	}
 }
 
+cell expandCond(const cell &c)
+{
+	cell ret(List);
+	ret.list.push_back(if_sym);
+	for (cellit it = c.list[1].list.begin(); it != c.list[1].list.end(); it++)
+		ret.list.push_back(*it);
+	if (c.list.size() > 1) {
+		if (c.list[2].list[0].val == "else") {
+			for (cellit it = c.list[2].list.begin() + 1; it != c.list[2].list.end(); it++)
+				ret.list.push_back(*it);
+		}
+		else {
+			cell cond(List);
+			cond.list.push_back(cond_sym);
+			for (cellit it = c.list.begin() + 2; it != c.list.end(); it++)
+				cond.list.push_back(*it);
+			ret.list.push_back(expandCond(cond));
+		}
+	}
+	return ret;
+}
+
 // expand define 
 cell expand(const cell &c)
 {
@@ -297,7 +377,7 @@ cell expand(const cell &c)
 		assert(c.list.size() == 2);
 		return cell(c);
 	}
-	else if (c.list[0].val == "if") {	
+	else if (c.list[0].val == "if") {
 		cell cc(c);
 		if (cc.list.size() == 3)		// (if t c) => (if t c None)
 			cc.list.push_back(cell());
@@ -357,7 +437,7 @@ cell expand(const cell &c)
 		return ret;
 	}
 	else if (c.list[0].val == "lambda") {	// (lambda (x) e) or (lambda (x) e1 e2)
-		assert(c.list.size() >= 3);			
+		assert(c.list.size() >= 3);
 		cell ret(List);
 		ret.list.push_back(c.list[0]);
 		ret.list.push_back(c.list[1]);
@@ -374,6 +454,10 @@ cell expand(const cell &c)
 			}
 		}
 		ret.list.push_back(expand(exp));
+		return ret;
+	}
+	else if (c.list[0].val == "cond") { // (cond <clause1> <clause2> ...)
+		cell ret = expandCond(c);
 		return ret;
 	}
 	else {
@@ -431,28 +515,27 @@ cell read_from(std::list<std::string> & tokens)
 	else if (token[0] == '`' || token[0] == '\'') {
 		cell c(List);
 		c.list.push_back(quote_sym);
-		c.list.push_back(atom(token.substr(1, token.length() - 1)));
+		if (token.length() == 1)
+			c.list.push_back(read_from(tokens));
+		else
+			c.list.push_back(atom(token.substr(1, token.length() - 1)));
 		return c;
 	}
 	else
 		return atom(token);
 }
 
-// return the Lisp expression represented by the given string
-cell read(const std::string & s)
+// tokenize the input string,
+// construct cell by tokens
+// and expand the cell
+cell read(const std::string &s)
 {
 	std::list<std::string> tokens(tokenize(s));
-	return read_from(tokens);
-}
-
-cell read2(const std::string &s)
-{
-	std::list<std::string> tokens(tokenize(s));
-	cell c = expand(read_from(tokens));
-	//std::cout << "\n";
-	//printCell(c);
-	//std::cout << "\n";
-	return c;
+	cell c = read_from(tokens);
+	cell ret(expand(c));
+	printCell(ret);
+	std::cout << std::endl;
+	return ret;
 }
 
 // convert given cell to a Lisp-readable string
@@ -483,20 +566,62 @@ void repl(const std::string & prompt, environment * env)
 	}
 }
 
-int main()
+int main(void)
 {
-	environment global_env;
 	add_globals(global_env);
-	//repl("90> ", &global_env);
-
-	cell c = read("`hello");
+	//repl("SICPP> ", &global_env);
 
 	std::string exps[] = {
-		"(quote ())",
+		"(car '((1) (2 3) (4) (5 6)))",
+		"(cdr '((1) (2 3) (4) (5 6 (7 8 (9)))))",
+		"(cond ((> 3 3) `greater) ((< 3 3) `less) (else `equal))",
+		"(define (empty ? lst) (if (= (length lst) 0) (list ? `()) (list ? 3)))",
+		"(define (my-sum lst) (cond ((empty? lst) 0) ((list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst)))) (else (+ (car lst) (my-sum (cdr lst))))))",
+		"(my-sum '((1) (2 3) (4) (5 6)))",
+		"(my-sum '((1) (2 3) (4) (5 6 (7 8 (9)))))",
+		"(sqrt 10)",
+		"(define ((account bal) amt) (set! bal (+ bal amt)) bal)",
+		"(define a1(account 100))",
+		"(a1 0)",
+		"(a1 10)",
+		"(a1 10)",
+		"(define abs (lambda (n) ((if (> n 0) + -) 0 n)))",
+		"(list (abs -3) (abs 0) (abs 3))",
+		"(define (newton guess function derivative epsilon) (define guess2(- guess (/ (function guess) (derivative guess)))) (if (< (abs (- guess guess2)) epsilon) guess2 (newton guess2 function derivative epsilon)))",
+		"(define (square-root a) (newton 1 (lambda (x) (- (* x x) a)) (lambda (x) (* 2 x)) 1e-8))",
+		"(> (square-root 200.) 14.14213)",
+		"(< (square-root 200.) 14.14215)",
+		"(= (square-root 200.) (sqrt 200.))",
+		"(callcc (lambda (throw) (+ 5 (* 10 (throw 1)))))", // throw 1
+		"(callcc (lambda (throw) (+ 5 (* 10 1))))", // throw 15
+		"(callcc (lambda (throw) (+5 (*10 (callcc(lambda(escape) (*100 (escape 3))))))))", // throw 35
+		"(callcc (lambda (throw) (+5 (*10 (callcc(lambda(escape) (*100 (throw 3))))))))", // throw 3
+		"(callcc (lambda (throw) (+5 (*10 (callcc(lambda(escape) (*100 1)))))))", // throw 1005
+		"(eval `(+ 3 4))",
+		"(pair? 3)",
+		"(pair? (cons 3 `()))",
+		"(pair? (list 3 4))",
+		"(pair? (cons `() `()))",
+		"(pair? (list))",
+		"(pair? (list 3))",
+		"(pair? `())",
+		"(define ex `(+ 3 4))",
+		"(define x `())",
+		"x",
+		"(define x (quote ()))",
+		"x",
+		"(define nil `())",
 		"nil",
+		"(quote ())",
 		"(define l (list 3 4))",
+		"(define lst (cons 3 nil))",
+		"lst",
 		"(list? 3)",
 		"(list? l)",
+		"(list? lst)",
+		"(list? nil)",
+		"(null? `())",
+		"(null? 3)",
 		"(define str `hello)",
 		"(define str 'hello)",
 		"(define str (quote hello))",
@@ -518,10 +643,10 @@ int main()
 		"(define (fib n) (define (fib-kernal n1 n2 f1 f2) (if (< n1 n2) (fib-kernal (+ n1 1) n2 (+ f1 f2) f1) f2)) (fib-kernal 0 n 1 0))",
 	};
 	int en = sizeof(exps) / sizeof(exps[0]);
-	
+
 	for (int i = 0; i < en; i++) {
-		std::cout << exps[i] << " => " << std::endl;
-		std::cout << to_string(eval(read2(exps[i]), &global_env)) << std::endl;
+		std::cout << exps[i] << "\t => \t";
+		std::cout << to_string(eval(read(exps[i]), &global_env)) << std::endl;
 	}
 
 	std::string evas[] = {
@@ -540,8 +665,8 @@ int main()
 	int vn = sizeof(evas) / sizeof(evas[0]);
 
 	for (int i = 0; i < vn; i++) {
-		std::cout << evas[i] << " => " << std::endl;
-		std::cout << to_string(eval(read2(evas[i]), &global_env)) << std::endl;
+		std::cout << evas[i] << "\t => \t";
+		std::cout << to_string(eval(read(evas[i]), &global_env)) << std::endl;
 	}
 
 	return 0;
