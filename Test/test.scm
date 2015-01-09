@@ -140,14 +140,42 @@
 
 
 
+(cond 
+    ((= 3 3) `equal1) 
+    ((= 4 4) `equal2))
+
+
+(define (my-sum lst) (cond ((empty? lst) 0) ((list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst)))) (else (+ (car lst) (my-sum (cdr lst))))))
+
+(define (my-sum lst) 
+    (cond 
+        ((empty? lst) 0) 
+        ((list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst)))) 
+        (else (+ (car lst) (my-sum (cdr lst))))))
+
+; (cond <cond clause1> <cond clause2> ...)
+; <cond clause> -> (<test> <expression>)
+
+
+(define (my-sum lst) 
+    (cond 
+        ((empty? lst) 0) 
+        ((list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst)))) 
+        (else (+ (car lst) (my-sum (cdr lst))))))      
+; expand =>
+(define my-sum 
+    (lambda (lst) 
+        (if (empty? lst) 
+            0 
+            (if (list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst))) 
+            (+ (car lst) (my-sum (cdr lst)))))))
+
+(define my-sum (lambda (lst) (if (empty? lst) 0 (if (list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst))) (+ (car lst) (my-sum (cdr lst)))))))
 
 
 
-
-
-
-
-
+(my-sum '((1) (2 3) (4) (5 6)))
+(my-sum '((1) (2 3) (4) (5 6 (7 8 (9)))))
 
 
 
