@@ -138,24 +138,115 @@
 (call/cc (lambda (throw) (+ 5 (* 10 (call/cc (lambda (escape) (* 100 (throw 3))))))))
 ; 3, (
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; quotation
+’"abc" ; "abc"
+’145932 ; 145932
+’a ; a
+’#(a b c) ; #(a b c)
+’() ; ()
+’(+ 1 2) ; (+ 1 2)
+’(quote a) ; (quote a)
+’’a ; (quote a)
 
 
-(cond 
-    ((= 3 3) `equal1) 
-    ((= 4 4) `equal2))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Base types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+boolean?
+pair?
+symbol?
+number?
+char?
+string?
+vector?
+procedure?
+null?
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Expressions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(define (my-sum lst) (cond ((empty? lst) 0) ((list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst)))) (else (+ (car lst) (my-sum (cdr lst))))))
+;;;;;;; quotation
+(quote a) ; a
+(quote #(a b c)) ; #(a b c)
+(quote (+ 1 2)) ; (+ 1 2)
+`"abc" ; "abc"
+`145932 ; 145932
+`a ; a
+`#(a b c) ; #(a b c)
+`() ; ()
+`(+ 1 2) ; (+ 1 2)
+`(quote a) ; (quote a)
+``a ; (quote a)
 
-(define (my-sum lst) 
-    (cond 
-        ((empty? lst) 0) 
-        ((list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst)))) 
-        (else (+ (car lst) (my-sum (cdr lst))))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Procedures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; (lambda <formals> <body>)
+
+(lambda (x) (+ x x)) ; a procedure
+((lambda (x) (+ x x)) 4) ; 8
+((lambda (x) (define (p y) (+ y 1)) (+ (p x) x)) 5) ; 11
+(define reverse-substract (lambda (x y) (- y x))) ; a procedure
+(reverse-substract 7 10) ; 3
+(define add4 (let ((x 4)) (lambda (y) (+ x y)))) ; a procedure
+(add4 6) ; 10
+
+((lambda x x) 3 4 5 6) ; (3 4 5 6)
+((lambda (x y . z) z) 3 4 5 6) ; (5 6)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Conditionals ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; if 
+;(if <test> <consequent> <alternate>)
+;(if <test> <consequent>)
+
+(if (> 3 2) `yes `no) ; yes
+(if (> 2 3) `yes `no) ; no
+(if (> 3 2) (- 3 2) (+ 3 2)) ; 1
+(if #f #f) ; unspecified
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Assignments ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(set! <variable> <expression>)
+(let ((x 2)) (+ x 1) (set! x 4) (+ x 1)) ; 5
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; when 
+(when (< (pressure tube) 60)
+    (open-valve tube)
+    (attach floor-pump tube)
+    (depress floor-pump 5)
+    (detach floor-pump tube)
+    (close-valve tube))
+    
+(if (< pressure tube> 60)
+    (begin
+        (open-valve tube)
+        (attach floor-pump tube)
+        (depress floor-pump 5)
+        (detach floor-pump tube)
+        (close-valve tube)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; unless 
+
+(unless (>= pressure tube) 60)
+    (open-valve tube)
+    (attach floor-pump tube)
+    (depress floor-pump 5)
+    (detach floor-pump tube)
+    (close-valve tube))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; cond
+
+(cond ((> 3 2) `greater) ((< 3 2) `less)) ; greater
+(cond ((> 3 3) `greater) ((< 3 3) `less) (else `equal)) ; equal
 
 ; (cond <cond clause1> <cond clause2> ...)
 ; <cond clause> -> (<test> <expression>)
 
+(cond ((= 3 3) `equal1) ((= 4 4) `equal2))
+(define (my-sum lst) (cond ((empty? lst) 0) ((list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst)))) (else (+ (car lst) (my-sum (cdr lst))))))
+
+(define (empty? lst) (if (= (length lst) 0) (list? `()) (list? 3)))
 
 (define (my-sum lst) 
     (cond 
@@ -169,21 +260,57 @@
             0 
             (if (list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst))) 
             (+ (car lst) (my-sum (cdr lst)))))))
-
-(define my-sum (lambda (lst) (if (empty? lst) 0 (if (list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst))) (+ (car lst) (my-sum (cdr lst)))))))
-
-
+            
+(define my-sum (lambda (lst) (if (empty? lst) 0 (if (list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst))) (+ (car lst) (my-sum (cdr lst)))))))            
 
 (my-sum '((1) (2 3) (4) (5 6)))
 (my-sum '((1) (2 3) (4) (5 6 (7 8 (9)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; case
 
+(case c ((#\a) 1) ((#\b) 2) ((#\c) 3) (else 4))
+(case (* 2 3) ((2 3 5 6 7) 'prime) ((1 4 6 8 9) 'composite))
 
+(case (* 2 3) ((2 3 5 7) `prime) ((1 4 6 8 9) `composite)) ; composite
+(case (car `(c d)) ((a) `a) ((b) `b)) ; unspecified
+(case (car `(c d)) (( a e i o u) `vowel) ((w y) `semivowel) (else `consonant)) ; consonant
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; and
 
+(and (= 2 2) (> 2 1)) ; #t
+(and (= 2 2) (< 2 1)) ; #f
+(and 1 2 `c `(f g)) ; (f g)
+(and) ; #t
 
+(define-syntax and
+    (syntax-rules ()
+        ((and) #t)
+        ((and test) test)
+        ((and test1 test2 ...)
+         (if test1 (and test2 ...) #f))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; or
 
+(or 1 2) ; 1
+(or #f 1) ; 1
+(or (= 2 2) (> 2 1)) ; #t
+(or (= 2 2) (< 2 1)) ; #t
+(or #f #f #f) ; f
+(or `(b c) (/ 3 0)) ; (b c)
 
+(define-syntax or
+    (syntax-rules ()
+        ((or) #f)
+        ((or test) test)
+        ((or test1 test2 ...)
+         (let ((x test1))
+          (if x x (or test2 ...))))))
+         
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Binding constructs ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; let
+(let ((x 2) (y 3)) (* x y)) ; 6
+(let ((x 2) (y 3)) (let ((x 7) (z (+ x y))) (* z x))) ; 35
 
 

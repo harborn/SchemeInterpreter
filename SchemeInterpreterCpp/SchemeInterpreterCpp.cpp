@@ -252,7 +252,7 @@ cell proc_eval(const cells & c)
 
 cell proc_emptyp(const cells & c)
 {
-	return c[0].type == List && c[0].list.empty() ? true_sym : false_sym;
+	return (c[0].type == List || c[0].type == Symbol) && c[0].list.empty() ? true_sym : false_sym;
 }
 
 // define the bare minimum set of primintives necessary to pass the unit tests
@@ -272,6 +272,7 @@ void add_globals(environment & env)
 	env[""] = cell();						env["list?"] = cell(&proc_listp);
 	env["pair?"] = cell(&proc_pairp);		env["apply"] = cell(&proc_apply);
 	env["callcc"] = cell(&proc_callcc);		env["eval"] = cell(&proc_eval);
+	env["empty?"] = cell(&proc_emptyp);
 }
 
 
@@ -365,6 +366,11 @@ cell expandCond(const cell &c)
 		}
 	}
 	return ret;
+}
+
+cell expandCase(const cell &c)
+{
+	return cell();
 }
 
 // expand define 
@@ -533,8 +539,8 @@ cell read(const std::string &s)
 	std::list<std::string> tokens(tokenize(s));
 	cell c = read_from(tokens);
 	cell ret(expand(c));
-	printCell(ret);
-	std::cout << std::endl;
+	//printCell(ret);
+	//std::cout << std::endl;
 	return ret;
 }
 
@@ -569,13 +575,14 @@ void repl(const std::string & prompt, environment * env)
 int main(void)
 {
 	add_globals(global_env);
-	//repl("SICPP> ", &global_env);
+	repl("SICPP> ", &global_env);
 
 	std::string exps[] = {
+		"(empty? 3)",
 		"(car '((1) (2 3) (4) (5 6)))",
 		"(cdr '((1) (2 3) (4) (5 6 (7 8 (9)))))",
 		"(cond ((> 3 3) `greater) ((< 3 3) `less) (else `equal))",
-		"(define (empty ? lst) (if (= (length lst) 0) (list ? `()) (list ? 3)))",
+		//"(define (empty? lst) (if (= (length lst) 0) (list? `()) (list? 3)))",
 		"(define (my-sum lst) (cond ((empty? lst) 0) ((list? (car lst)) (+ (my-sum (car lst)) (my-sum (cdr lst)))) (else (+ (car lst) (my-sum (cdr lst))))))",
 		"(my-sum '((1) (2 3) (4) (5 6)))",
 		"(my-sum '((1) (2 3) (4) (5 6 (7 8 (9)))))",
@@ -613,6 +620,7 @@ int main(void)
 		"(define nil `())",
 		"nil",
 		"(quote ())",
+		"``a",
 		"(define l (list 3 4))",
 		"(define lst (cons 3 nil))",
 		"lst",
