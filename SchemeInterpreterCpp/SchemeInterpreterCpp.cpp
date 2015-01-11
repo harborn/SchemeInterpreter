@@ -466,6 +466,23 @@ cell expand(const cell &c)
 		cell ret = expandCond(c);
 		return ret;
 	}
+	else if (c.list[0].val == "let") {  // (let <bindings> <body>), <bindings> -> ((<variables1> <init1>) ...)
+		assert(c.list.size() > 2);
+		cell v(List), p(List);
+		for (cellit it = c.list[1].list.begin(); it != c.list[1].list.end(); it++) {
+			v.list.push_back((*it).list[0]);
+			p.list.push_back((*it).list[1]);
+		}
+		cell l(List);
+		l.list.push_back(lambda_sym);
+		l.list.push_back(v);
+		l.list.push_back(expand(c.list[2]));
+		cell ret(List);
+		ret.list.push_back(l);
+		for (cellit it = p.list.begin(); it != p.list.end(); it++) 
+			ret.list.push_back(*it);
+		return ret;
+	}
 	else {
 		cell ret(List);
 		for (cellit it = c.list.begin(); it != c.list.end(); it++) {
@@ -539,8 +556,8 @@ cell read(const std::string &s)
 	std::list<std::string> tokens(tokenize(s));
 	cell c = read_from(tokens);
 	cell ret(expand(c));
-	//printCell(ret);
-	//std::cout << std::endl;
+	printCell(ret);
+	std::cout << std::endl;
 	return ret;
 }
 
@@ -575,9 +592,12 @@ void repl(const std::string & prompt, environment * env)
 int main(void)
 {
 	add_globals(global_env);
-	repl("SICPP> ", &global_env);
+	//repl("SICPP> ", &global_env);
 
 	std::string exps[] = {
+		"(define add4 (let ((x 4)) (lambda (y) (+ x y))))",
+		"(let ((x 2) (y 3)) (* x y))",
+		"(let ((x 2) (y 3)) (let ((x 7) (z (+ x y))) (* z x)))",
 		"(empty? 3)",
 		"(car '((1) (2 3) (4) (5 6)))",
 		"(cdr '((1) (2 3) (4) (5 6 (7 8 (9)))))",

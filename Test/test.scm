@@ -188,7 +188,11 @@ null?
 (define reverse-substract (lambda (x y) (- y x))) ; a procedure
 (reverse-substract 7 10) ; 3
 (define add4 (let ((x 4)) (lambda (y) (+ x y)))) ; a procedure
+; expand as
+(define add4 ((lambda (x) (lambda (y) (+ x y))) 4))
 (add4 6) ; 10
+
+
 
 ((lambda x x) 3 4 5 6) ; (3 4 5 6)
 ((lambda (x y . z) z) 3 4 5 6) ; (5 6)
@@ -311,6 +315,12 @@ null?
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; let
 (let ((x 2) (y 3)) (* x y)) ; 6
+; expand as ((lambda (x y) (* x y)) 2 3 )
 (let ((x 2) (y 3)) (let ((x 7) (z (+ x y))) (* z x))) ; 35
+; expand as ((lambda (x y) ((lambda (x z) (* z x)) 7 (+ x y ))) 2 3)
+(define add4 (let ((x 4)) (lambda (y) (+ x y))))
+; expand as (define add4 ((lambda (x) (lambda (y) (+ x y))) 4))
 
-
+(define add4 (let ((x 4)) (lambda (y) (+ x y))))       ;  =>     (define add4 ((lambda (x) (lambda (y) (+ x y))) 4))
+(let ((x 2) (y 3)) (* x y))   ;   =>     ((lambda (x y) (* x y)) 2 3)
+(let ((x 2) (y 3)) (let ((x 7) (z (+ x y))) (* z x)))  ;  =>     ((lambda (x y) ((lambda (x z) (* z x)) 7 (+ x y))) 2 3)
