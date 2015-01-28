@@ -155,6 +155,113 @@ range a b = [a..b]
 
   
 -- Problem. 26
-combinations :: (Eq a) => Int -> [a] -> [[a]]
-combinations _ [] = []
-combinations n xs = [map (xs!!i:) (combinations (n-1) ((init $ take (i+1) xs)++(drop (i+1) xs))) | i <- [0..((length xs) - n)]]
+combinations :: Int -> [a] -> [[a]]
+-- combinations _ [] = []
+-- combinations 0 _ = [[]]
+-- combinations n (x:xs) = (map (x:) (combinations (n-1) xs) ++ (combinations n xs))
+
+combinations 0 _ = [[]]
+combinations n xs = [xs !! i : x | i <- [0..(length xs)-1]
+								  ,x <- combinations (n-1) (drop (i+1) xs)]
+
+
+
+
+
+
+
+-- Problem. 28
+lfsort :: [[a]] -> [[a]]
+lfsort [] = []
+lfsort (x:xs) = 
+	let 
+		left = lfsort [l | l <- xs, length l < length x]
+		right = lfsort [r | r <- xs, length r >= length x]
+	in  left++[x]++right
+
+
+---------------------------------------------------------------------------------------------
+---- Arithmetic
+
+-- Problem. 31
+isPrime :: Integer -> Bool
+isPrime x = all (==True) $ map (\i -> if mod x i == 0 then False else True) [2..floor $ sqrt $ fromIntegral x]
+
+
+
+
+-- Problem. 32
+myGCD :: Integer -> Integer -> Integer
+--myGCD x y 
+--    | y == 0 = abs x
+--    | otherwise = myGCD y (mod x y)
+
+myGCD x y = if x == 0 then y
+            else if y == 0 then x
+                 else if x > y then myGCD (abs y) (x-y)
+                      else myGCD (abs x) (y-x)
+
+
+-- Problem. 33
+coprime :: Integer -> Integer -> Bool
+coprime x y = if myGCD x y == 1 then True else False
+
+
+-- Problem. 34
+totient :: Int -> Int
+totient m = m
+
+
+
+
+
+
+
+
+
+
+
+
+
+---------------------------------------------------------------------------------------------
+---- Logic and Codes
+
+-- Problem. 46
+
+
+
+
+
+
+
+-- Problem. 49
+gray :: Int -> [String]
+gray 0 = [""]
+--gray n = (map ('0':) (gray (n-1))) ++ (reverse (map ('1':) (gray (n-1))))
+gray n = let xs = gray (n-1) in map ('0':) xs ++ map ('1':) (reverse xs)
+
+
+-- Problem. 50
+huffman :: [(Char, Int)] -> [(Char, String)]
+huffman [] = []
+
+thesort :: [(Char, Int)] -> [(Char, Int)]
+thesort [] = []
+thesort (x:xs) = 
+    let left = [l | l <- xs, snd l < snd x]
+        right = [r | r <- xs, snd r >= snd x]
+    in  right++[x]++left
+
+
+
+
+
+---------------------------------------------------------------------------------------------
+---- Binary trees
+
+-- Problem. 54A
+
+data Tree a = Empty | Branch a (Tree a) (Tree a) deriving (Show, Eq)
+
+
+
