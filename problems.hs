@@ -1,6 +1,8 @@
 
-import Data.List (group)
+import Data.List (group, sortBy, insertBy)
+import Data.Ord (comparing)
 import System.Random
+import Control.Arrow (second)
 
 
 -- Problem. 1
@@ -259,8 +261,39 @@ goldbachList' m n p = filter (\x -> (fst x > p) && (snd x > p)) $ goldbachList m
 ---- Logic and Codes
 
 -- Problem. 46
+not' :: Bool -> Bool
+not' True = False
+not' False = True
+
+and' :: Bool -> Bool -> Bool
+and' True True = True
+and' _ _ = False
+
+or' :: Bool -> Bool -> Bool
+or' False False = False
+or' _ _ = True
+
+nor' :: Bool -> Bool -> Bool
+nor' a b = not' $ or' a b
+
+nand' :: Bool -> Bool -> Bool
+nand' a b = not' $ and' a b
+
+xor' :: Bool -> Bool -> Bool
+xor' False True = True
+xor' True False = True
+xor' _ _ = False
+
+impl' :: Bool -> Bool -> Bool
+impl' a b = or' (not' a) b
+
+equ' :: Bool -> Bool -> Bool
+equ' True True = True
+equ' False False = True
+equ' _ _ = False
 
 
+-- Problem. 47
 
 
 
@@ -272,8 +305,8 @@ gray n = let xs = gray (n-1) in map ('0':) xs ++ map ('1':) (reverse xs)
 
 
 -- Problem. 50
-huffman :: [(Char, Int)] -> [(Char, String)]
-huffman [] = []
+--huffman :: [(Char, Int)] -> [(Char, String)]
+--huffman [] = []
 
 thesort :: [(Char, Int)] -> [(Char, Int)]
 thesort [] = []
@@ -283,15 +316,64 @@ thesort (x:xs) =
     in  right++[x]++left
 
 
-
+--huffman :: [(Char, Int)] -> [(Char, String)]
+--huffman =
+--  let shrink [(_, ys)] = sortBy (comparing fst) ys
+--      shrink (x1:x2:xs) = shrink $ insertBy (comparing fst) (add x1 x2) xs
+--      add (p1, xs1) (p2, xs2) =
+--        (p1 + p2, map (second ('0':)) xs1 ++ map (second ('1':)) xs2)
+--  in  shrink . map (\(c, p) -> (p, [(c ,"")])) . sortBy (comparing snd)
 
 
 ---------------------------------------------------------------------------------------------
 ---- Binary trees
 
 -- Problem. 54A
+-- Always True due to Haskell's type system doesn't allow incomplete tree branch
 
 data Tree a = Empty | Branch a (Tree a) (Tree a) deriving (Show, Eq)
+
+leaf x = Branch x Empty Empty
+
+treeHeight :: Tree a -> Int
+treeHeight Empty = 0
+treeHeight (Branch _ l r) = max (treeHeight l + 1) (treeHeight r + 1)
+
+tree1 = Branch 'a' (Branch 'b' (Branch 'd' Empty Empty) (Branch 'e' Empty Empty)) (Branch 'c' Empty (Branch 'f' (Branch 'g' Empty Empty) Empty))
+tree2 = Branch 'a' Empty Empty
+tree3 = Empty
+tree4 = Branch 1 (Branch 2 Empty (Branch 4 Empty Empty)) (Branch 2 Empty Empty)
+
+
+-- Problem. 55
+
+treeCount :: Tree a -> Int
+treeCount Empty = 0
+treeCount (Branch _ l r) = treeCount l + treeCount r + 1
+
+
+isBlancedTree :: Tree a -> Bool
+isBlancedTree Empty = True
+isBlancedTree (Branch _ l r) = (abs ((treeCount l) - (treeCount r))) <= 1 && isBlancedTree l && isBlancedTree r
+
+cbalTree :: Int -> [Tree Char]
+cbalTree 0 = [Empty]
+--cbal-tree 1 = [Branch 'x' Empty Empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
