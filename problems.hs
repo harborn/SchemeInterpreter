@@ -208,18 +208,50 @@ coprime x y = if myGCD x y == 1 then True else False
 
 
 -- Problem. 34
-totient :: Int -> Int
-totient m = m
+totient :: Integer -> Int
+--totient m = length $ filter (==True) $ map (coprime m) [1..(m-1)]
+
+totient 1 = 1
+totient a = length $ filter (coprime a) [1..a-1]
+        where coprime a b = gcd a b == 1
 
 
+-- Problem. 35
+primeFactors :: Integer -> [Integer]
+primeFactors 1 = []
+primeFactors n = let prime = head $ dropWhile ((/= 0) . mod n) [2..n]
+                 in (prime:) $ primeFactors $ div n prime
 
 
+-- Problem. 36
+prime_factors_mult :: Integer -> [(Integer, Int)]
+prime_factors_mult n = map (\x -> (head x, length x)) $ group $ primeFactors n
 
 
+-- Problem. 37
+phi :: Integer -> Integer
+--phi m = foldl (*) 1 $ map (\x -> truncate (fromIntegral(fst x - 1) * (fromIntegral (fst x)) ** (fromIntegral (snd x - 1)))) $ prime_factors_mult m
+phi m = product [(p - 1) * p ^ (c - 1) | (p, c) <- prime_factors_mult m]
 
 
+-- Problem. 38
+totient_phi_min :: Integer -> Integer
+totient_phi_min m = min (toInteger (totient m)) (phi m)
 
+-- Problem. 39
+primesR :: Integer -> Integer -> [Integer]
+primesR m n = filter (\x -> isPrime x) [m..n]
 
+-- Problem. 40
+goldbach :: Integer -> (Integer, Integer)
+goldbach m = head [(x,y) | x <- pr, y <- pr, x+y == m] where pr = primesR 2 (m-2)
+
+-- Problem. 41
+goldbachList :: Integer -> Integer -> [(Integer, Integer)]
+goldbachList m n = map goldbach $ filter even [m..n]
+
+goldbachList' :: Integer -> Integer -> Integer -> [(Integer, Integer)]
+goldbachList' m n p = filter (\x -> (fst x > p) && (snd x > p)) $ goldbachList m n
 
 
 
@@ -227,8 +259,6 @@ totient m = m
 ---- Logic and Codes
 
 -- Problem. 46
-
-
 
 
 
