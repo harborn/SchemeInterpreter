@@ -360,20 +360,62 @@ cbalTree :: Int -> [Tree Char]
 cbalTree 0 = [Empty]
 --cbal-tree 1 = [Branch 'x' Empty Empty]
 
+cbalTree n = 
+    if odd n then let
+        left = cbalTree (quot (n-1) 2)
+        right = cbalTree (n-1 - quot (n-1) 2)
+        in [Branch 'x' l r | l <- left, r <- right]
+    else let
+        left1 = cbalTree (quot (n-1) 2)
+        right1 = cbalTree (n-1 - quot (n-1) 2)
+        t1 = [Branch 'x' l r | l <- left1, r <- right1]
+        left2 = cbalTree (quot n 2)
+        right2 = cbalTree (n-1 - quot n 2)
+        t2 = [Branch 'x' l r | l <- left2, r <- right2]
+        in t1 ++ t2
+    
+cbalTree' 0 = [Empty]
+cbalTree' 1 = [leaf 'x']
+cbalTree' n = if n `mod` 2 == 1 then 
+             [ Branch 'x' l r | l <- cbalTree ((n - 1) `div` 2), 
+                                r <- cbalTree ((n - 1) `div` 2) ] 
+             else 
+             concat [ [Branch 'x' l r, Branch 'x' r l] | l <- cbalTree ((n - 1) `div` 2), 
+                                                         r <- cbalTree (n `div` 2) ]
+    
+    
+
+-- Problem. 56
+
+symmetric :: Tree a -> Bool
+symmetric Empty = True
+symmetric (Branch _ l r) = symmetricH l r
+
+symmetricH :: Tree a -> Tree a -> Bool
+symmetricH Empty (Branch _ _ _) = False
+symmetricH (Branch _ _ _) Empty = False
+symmetricH Empty Empty = True
+symmetricH (Branch _ l1 r1) (Branch _ l2 r2) = symmetricH l1 r2 && symmetricH r1 l2
 
 
 
+-- Problem. 57
+quickSort :: Ord a => [a] -> [a]
+quickSort [] = []
+quickSort (x:xs) = let
+    left = quickSort [l | l <- xs, l < x]
+    right = quickSort [r | r <- xs, r >= x]
+    in left++[x]++right
 
+construct :: [a] -> Tree a
+construct [] = Empty
+construct x = Branch (x!!middle) (construct (take middle x)) (construct (drop (middle+1) x))
+    where middle = quot (length x) 2
+    
 
+-- Problem. 58
+sysCbalTrees n = filter (\x -> (symmetric x) == True) $ cbalTree n
 
-
-
-
-
-
-
-
-
-
-
+-- Problem. 59
+hbalTree :: Int -> Tree a
 
