@@ -102,10 +102,10 @@ repli :: [a] -> Int -> [a]
 -- another beatiful implementation
 --repli = flip $ concatMap . replicate
 
---repli xs n = xs >>= replicate n
+repli xs n = xs >>= replicate n
 
-repli [] _ = []
-repli (x:xs) n = foldr (const (x:)) (repli xs n) [1..n]
+--repli [] _ = []
+--repli (x:xs) n = foldr (const (x:)) (repli xs n) [1..n]
 
 -- Problem. 16
 dropEvery :: [a] -> Int -> [a]
@@ -417,5 +417,41 @@ construct x = Branch (x!!middle) (construct (take middle x)) (construct (drop (m
 sysCbalTrees n = filter (\x -> (symmetric x) == True) $ cbalTree n
 
 -- Problem. 59
-hbalTree :: Int -> Tree a
+hbalTree :: a -> Int -> [Tree a]
+hbalTree _ 0 = [Empty]
+hbalTree x 1 = [leaf x]
+hbalTree x n = let
+    sub1 = hbalTree x (n-1)
+    sub2 = hbalTree x (n-2)
+    t1 = [Branch x l r | l <- sub1, r <- sub2]
+    t2 = [Branch x l r | l <- sub2, r <- sub1]
+    t3 = [Branch x l r | l <- sub1, r <- sub1]
+    in t1++t2++t3
+
+
+-- Problem. 60
+--hbalTreeNodes :: 
+
+
+maxNodes :: Int -> Int
+maxNodes h = 2^h-1
+
+minHeight :: Int -> Int
+minHeight n = ceiling $ logBase 2 $ fromIntegral (n+1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
