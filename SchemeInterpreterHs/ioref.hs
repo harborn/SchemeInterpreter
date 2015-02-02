@@ -24,5 +24,13 @@ main :: IO ()
 main = do
     ref <- newIORef Nothing
     magic ref
-
     readIORef ref >>= print
+
+
+func :: [(String, String)]
+func = [("add", "+")
+	   ,("minus", "-")
+	   ,("multi", "*")
+	   ,("divide", "/")
+	   ,("mod", "%")
+	   ]

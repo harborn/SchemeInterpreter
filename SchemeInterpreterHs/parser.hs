@@ -76,7 +76,11 @@ data LispVal = Atom String
              | String String
              | Bool Bool
              | List [LispVal]
-               deriving (Eq, Ord, Show)
+             | PrimitiveFunc ([LispVal] -> LispVal)
+             | Func { params :: [String]
+             		, vararg :: (Maybe String)
+             		, body :: [LispVal]
+             		, closure :: Env }
 
 type Env = IORef [(String, IORef LispVal)]
 
@@ -112,13 +116,13 @@ readToken (x:xs) =
 
 
 
-printLispVal :: LispVal -> String
-printLispVal x = case x of
+showVal :: LispVal -> String
+showVal x = case x of
 	Atom a 	 -> a ++ " "
 	Number i -> show(i) ++ " "
 	String s -> s ++ " "
 	Bool b 	 -> show(b) ++ " "
-	List l   -> "( "++(concat $ map printLispVal l)++") "
+	List l   -> "( "++(concat $ map showVal l)++") "
 
 
 isInteger :: String -> Bool
@@ -143,9 +147,6 @@ isBool _ = False
 --parseLispVal :: String -> LispVal
 --parseLispVal x = case x of
 
-numericOp :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
-numericOp op params = Number $ foldl1 op $ map unpackNum params
-
 unpackNum :: LispVal -> Integer
 unpackNum (Number n) = n
 unpackNum (List [n]) = unpackNum n
@@ -165,28 +166,63 @@ nullEnv = newIORef []
 --env <- primitiveBindings >>= flip eval "(+ 1 2 3 4 5 6)" >>= putStrLn
 --env <- primitiveBindings >>= flip evalString "(+ 1 2 3 4 5 6)" >>= putStrLn
 
-{-
-eval :: LispVal -> LispVal
-eval val@(String _) = val
-eval val@(Char _) = val
-eval val@(Number _) = val
-eval val@(Bool _) = val
-eval
--}
 
-eleft :: Either a b -> a
-eleft e = (lefts [e])!!0
+eval :: Env -> LispVal -> LispVal
+eval env val@(String _) = val
+eval env val@(Number _) = val
+eval env val@(Bool _) = val
+eval env (Atom id) = getVar env id
+eval env (List (func : args)) = apply func args
 
-eright :: Either a b -> b
-eright e = (rights [e])!!0
 
-getEitherVal :: Either a b -> String
+--apply (Atom "+") [Number 1,Number 2,Number 3,Number 4,Number 5]
+
+
+getEitherVal :: Either a b -> IO String
 getEitherVal e = case e of
-    Left a -> "Left Value "
-    Right b -> "Right Value"
+    Left a -> packVal "Error happened"
+    Right b -> packVal "parse successfully"
 
 packVal :: a -> IO a
 packVal a = return a
 
-unpackVal :: IO (Either a b) -> String
+unpackVal :: IO (Either a b) -> IO String
 unpackVal v = v >>= getEitherVal
+
+
+primitives :: [(String, [LispVal] -> LispVal)]
+primitives = [("+", binaryFunc (+))
+			 ,("-", binaryFunc (-))
+			 ,("*", binaryFunc (*))
+			 ]
+
+
+binaryFunc :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
+binaryFunc op params = Number $ foldl1 op $ map unpackNum params
+
+getVar :: Env -> String -> LispVal
+getVar env var = List []
+--getVar env var = lookup var $ readIORef env
+
+apply :: LispVal -> [LispVal] -> LispVal
+apply (PrimitiveFunc func) args = func args
+
+evalString :: Env -> String -> String
+evalString env expr = showVal $ eval env $ readExpr expr
+
+evalExpr :: String -> IO ()
+evalExpr expr = nullEnv >>= putStrLn . (flip evalString expr)
+
+bindVars :: Env -> [(String, LispVal)] -> IO Env
+bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
+  where extendEnv bindings env = liftM (++ env) (mapM addBinding bindings)
+        addBinding (var, value) = do
+            ref <- newIORef value
+            return (var, ref)
+
+primitiveBindings :: IO Env
+primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc PrimitiveFunc) primitives)
+  where makeFunc constructor (var, func) = (var, constructor func)
+
+makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
+
