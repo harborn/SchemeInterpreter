@@ -9,6 +9,7 @@ import Control.Monad.Error
 import Data.IORef
 import System.IO
 import System.Environment
+import Data.Either
 
 --import Text.Parsec.Prim
 --import Text.Parsec.Token (commaSep, integer, decimal)
@@ -19,13 +20,13 @@ simple :: Parser Char
 simple = letter
 
 run :: Show a => Parser a -> String -> IO ()
-run p input = 
-            case (parse p "" input) of 
+run p input =
+            case (parse p "" input) of
               Left err -> do { putStr "parse error at "
                              ; print err
                              }
               Right x -> print x
-              
+
 
 openClose :: Parser Char
 openClose = do {
@@ -40,7 +41,7 @@ parens = do {
 			; char ')'
 			; parens
 			}
-		<|> return ()	   
+		<|> return ()
 
 --test = case (parse (commaSep integer) "" "11, 2, 43") of
 --		Left err -> print err
@@ -89,25 +90,25 @@ tokenize exp = words $ replace ")" " ) " $ replace "(" " ( " exp
 
 readExpr :: String -> LispVal
 readExpr = head . readToken . tokenize
-	
+
 readToken :: [String] -> [LispVal]
 readToken [] = []
-readToken (x:xs) = 
-	if x == "(" then 
-		let 
+readToken (x:xs) =
+	if x == "(" then
+		let
 			ts1 = takeWhile (/="(") xs
 			ts2 = takeWhile (/=")") xs
-		in if length ts1 > length ts2 then 
+		in if length ts1 > length ts2 then
 			[List (readToken ts2)]++
 			(readToken (drop (length ts2) xs))
 		   else [List (readToken xs)]
 	else if x == ")" then readToken xs
-	else let val = 
+	else let val =
 			if (isInteger x) then (Number (read x::Integer))
 			else if (isDouble x) then (Float (read x::Double))
 			 	 else if (isBool x) then (Bool (read x::Bool))
 			 	  	  else (Atom x)
-		 in [val]++readToken xs where 
+		 in [val]++readToken xs where
 
 
 
@@ -129,7 +130,7 @@ isDouble :: String -> Bool
 isDouble s = case reads s :: [(Double, String)] of
   	[(_, "")] -> True
   	_         -> False
- 
+
 isNumeric :: String -> Bool
 isNumeric s = isInteger s || isDouble s
 
@@ -161,4 +162,31 @@ nullEnv :: IO Env
 nullEnv = newIORef []
 
 
-env <- primitiveBindings >>= flip eval "(+ 1 2 3 4 5 6)" >>= putStrLn
+--env <- primitiveBindings >>= flip eval "(+ 1 2 3 4 5 6)" >>= putStrLn
+--env <- primitiveBindings >>= flip evalString "(+ 1 2 3 4 5 6)" >>= putStrLn
+
+{-
+eval :: LispVal -> LispVal
+eval val@(String _) = val
+eval val@(Char _) = val
+eval val@(Number _) = val
+eval val@(Bool _) = val
+eval
+-}
+
+eleft :: Either a b -> a
+eleft e = (lefts [e])!!0
+
+eright :: Either a b -> b
+eright e = (rights [e])!!0
+
+getEitherVal :: Either a b -> String
+getEitherVal e = case e of
+    Left a -> "Left Value "
+    Right b -> "Right Value"
+
+packVal :: a -> IO a
+packVal a = return a
+
+unpackVal :: IO (Either a b) -> String
+unpackVal v = v >>= getEitherVal
