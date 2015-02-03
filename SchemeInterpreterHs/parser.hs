@@ -124,6 +124,8 @@ showVal x = case x of
 	Bool b 	 -> show(b) ++ " "
 	List l   -> "( "++(concat $ map showVal l)++") "
 
+showVal2 :: LispVal -> IO ()
+showVal2 = putStrLn . showVal
 
 isInteger :: String -> Bool
 isInteger s = case reads s :: [(Integer, String)] of
@@ -167,12 +169,15 @@ nullEnv = newIORef []
 --env <- primitiveBindings >>= flip evalString "(+ 1 2 3 4 5 6)" >>= putStrLn
 
 
-eval :: Env -> LispVal -> LispVal
-eval env val@(String _) = val
-eval env val@(Number _) = val
-eval env val@(Bool _) = val
+eval :: Env -> LispVal -> IO LispVal
+eval env val@(String _) = return val
+eval env val@(Number _) = return val
+eval env val@(Bool _) = return val
 eval env (Atom id) = getVar env id
-eval env (List (func : args)) = apply func args
+eval env (List (function : args)) = do
+    func <- eval env function
+    argVals <- mapM (eval env) args
+    apply func argVals
 
 
 --apply (Atom "+") [Number 1,Number 2,Number 3,Number 4,Number 5]
@@ -200,18 +205,21 @@ primitives = [("+", binaryFunc (+))
 binaryFunc :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
 binaryFunc op params = Number $ foldl1 op $ map unpackNum params
 
-getVar :: Env -> String -> LispVal
-getVar env var = List []
---getVar env var = lookup var $ readIORef env
+getVar :: Env -> String -> IO LispVal
+getVar env var = do
+    func <- readIORef env
+    case (lookup var func) of
+        Just v -> readIORef v
+        _ -> return (List [])
 
-apply :: LispVal -> [LispVal] -> LispVal
-apply (PrimitiveFunc func) args = func args
+apply :: LispVal -> [LispVal] -> IO LispVal
+apply (PrimitiveFunc func) args = return (func args)
 
-evalString :: Env -> String -> String
-evalString env expr = showVal $ eval env $ readExpr expr
+evalString :: Env -> String -> IO ()
+evalString env expr = (eval env $ readExpr expr) >>= showVal2
 
 evalExpr :: String -> IO ()
-evalExpr expr = nullEnv >>= putStrLn . (flip evalString expr)
+evalExpr expr = nullEnv >>= (flip evalString expr)
 
 bindVars :: Env -> [(String, LispVal)] -> IO Env
 bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
