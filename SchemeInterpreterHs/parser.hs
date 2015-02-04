@@ -169,31 +169,25 @@ main = do
     modifyIORef ref (+1)
     readIORef ref >>= print
 
-
-nullEnv :: IO Env
-nullEnv = newIORef []
-
-
---env <- primitiveBindings >>= flip eval "(+ 1 2 3 4 5 6)" >>= putStrLn
---env <- primitiveBindings >>= flip evalString "(+ 1 2 3 4 5 6)" >>= putStrLn
-
-
 eval :: Env -> LispVal -> IO LispVal
 eval env val@(String _) = return val
 eval env val@(Number _) = return val
 eval env val@(Bool _) = return val
 eval env val@(Atom id) = getVar env id
 eval env (List [Atom "quote", val]) = return val
+{-
+eval env (List [Atom "define", Atom var, form]) = 
+    eval env form >>= defineVar env var
 
+eval env (List (Atom "define": List (Atom var : params): body)) =
+
+-}
 
 
 eval env (List (function : args)) = do
     func <- eval env function
     argVals <- mapM (eval env) args
     apply func argVals
-
-
---apply (Atom "+") [Number 1,Number 2,Number 3,Number 4,Number 5]
 
 
 getEitherVal :: Either a b -> IO String
@@ -222,7 +216,11 @@ primitives = [("+", numericBinFunc (+))
              ,("&&", boolBoolBinFunc (&&))
              ,("||", boolBoolBinFunc (||))
              
-             
+             ,("car", car)
+             ,("cdr", cdr)
+             ,("cons", cons)
+             ,("list", list)
+             ,("length", len)
 			 ]
 
 
@@ -237,12 +235,49 @@ boolBinFunc :: (LispVal -> a) -> (a -> a -> Bool) -> [LispVal] -> LispVal
 boolBinFunc unpack func [x, y] = if func (unpack x) (unpack y) then (Atom "#t") else (Atom "#f")
 boolBinFunc _ _ args = (Atom "expression error")
 
+car :: [LispVal] -> LispVal
+car [List (x:xs)] = x
+car _ = List []
+
+cdr :: [LispVal] -> LispVal
+cdr [List (x:xs)] = List xs
+cdr _ = List []
+
+cons :: [LispVal] -> LispVal
+cons x = List x
+
+list :: [LispVal] -> LispVal
+list = List
+
+len :: [LispVal] -> LispVal
+len [List x] = Number (toInteger (length x))
+len _ = Number 0
+
+
 getVar :: Env -> String -> IO LispVal
 getVar env var = do
     func <- readIORef env
     case (lookup var func) of
         Just v -> readIORef v
         _ -> return (List [])
+
+--setVar :: Env -> String -> LispVal -> IO LispVal
+--setVar env var val = do
+--    vars <- readIORef env
+    
+
+isDefined :: Env -> String -> IO Bool
+isDefined env var = do 
+    val <- getVar env var
+    case val of 
+        List [] -> return False
+        _ -> return True
+
+--defineVar :: Env -> String -> LispVal -> LispVal
+--defineVar env var val = do
+--    defined <- isDefined env var
+--    if defined 
+--        then
 
 apply :: LispVal -> [LispVal] -> IO LispVal
 apply (PrimitiveFunc func) args = return (func args)
@@ -262,7 +297,7 @@ bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
             return (var, ref)
 
 primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc PrimitiveFunc) primitives)
+primitiveBindings = (newIORef []) >>= (flip bindVars $ map (makeFunc PrimitiveFunc) primitives)
   where makeFunc constructor (var, func) = (var, constructor func)
 
 --makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
@@ -281,5 +316,3 @@ type Env = IORef [(String, IORef LispVal)]
 --globalFunctions :: IO Env
 --globalFunctions = 
 
-testVal :: IO LispVal
-testVal = return (Atom "testVal")

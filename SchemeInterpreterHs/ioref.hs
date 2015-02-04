@@ -61,7 +61,11 @@ persons = [
 		   ,Person { firstName = "Filter", lastName = "Wu", age = 27, height = 1.80, phoneNumber = "12346578901", flavor = "programming" }
 		  ]
 
+
+
 car1 = Car { company = "Ford", model = "Mustang", year = 1967}
+
+person1 = Person {firstName = "Youxi", lastName = "Wu", age = 28, height = 1.81, phoneNumber = "98765432109", flavor = "love"}
 
 type Env = IORef [(String, IORef Person)]
 
@@ -74,16 +78,21 @@ personsBinding = mapM tuple persons >>= newIORef
             ref <- (newIORef x)
             return (firstName x, ref)
 
+getVar :: String -> IO Person
+getVar name = do
+	env <- personsBinding
+	ps <- (readIORef env)
+	case (lookup name ps) of
+		Just x -> readIORef x
+		_ -> return (persons!!0)
 
-getVars :: Env -> String -> IO Person
-getVars env name = do
-    ps <- (readIORef env)
-    case (lookup name ps) of 
-        Just x -> readIORef x
-        _ -> return (persons!!0)
-
---setVars :: Env -> Person -> IO ()
-        
+setVar :: String -> Person -> IO ()
+setVar name person = do
+	env <- personsBinding
+	ps <- (readIORef env)
+	case (lookup name ps) of 
+		Just x -> do print "GOT YOU"; writeIORef x person
+		_ -> return ()
         
 
 newCounter :: IO (IO Int)
