@@ -63,17 +63,28 @@ persons = [
 
 car1 = Car { company = "Ford", model = "Mustang", year = 1967}
 
-type Env = IORef [(String, Person)]
+type Env = IORef [(String, IORef Person)]
 
 nullEnv :: IO Env
 nullEnv = newIORef []
 
-{-
-personBindings :: IO Env
-personBindings = do
-	env <- nullEnv
-	mapM (\x -> modifyIORef env (:(firstName x, x))) persons
--}	
+personsBinding :: IO Env
+personsBinding = mapM tuple persons >>= newIORef
+    where tuple x = do
+            ref <- (newIORef x)
+            return (firstName x, ref)
+
+
+getVars :: Env -> String -> IO Person
+getVars env name = do
+    ps <- (readIORef env)
+    case (lookup name ps) of 
+        Just x -> readIORef x
+        _ -> return (persons!!0)
+
+--setVars :: Env -> Person -> IO ()
+        
+        
 
 newCounter :: IO (IO Int)
 newCounter = do {

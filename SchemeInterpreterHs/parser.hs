@@ -118,11 +118,13 @@ readToken (x:xs) =
 
 showVal :: LispVal -> String
 showVal x = case x of
-	Atom a 	 -> a ++ " "
-	Number i -> show(i) ++ " "
-	String s -> s ++ " "
-	Bool b 	 -> show(b) ++ " "
-	List l   -> "( "++(concat $ map showVal l)++") "
+            (Atom a) 	 -> a ++ " "
+            (Number i) -> show(i) ++ " "
+            (String s) -> s ++ " "
+            (Bool b) 	 -> show(b) ++ " "
+            (Func {params=args, vararg=varargs, body=body, closure=env})   -> "this is a function"
+            (PrimitiveFunc p) -> "this is a primitive function"
+            (List l)   -> "( "++(concat $ map showVal l) ++ ") "
 
 showVal2 :: LispVal -> IO ()
 showVal2 = putStrLn . showVal
@@ -153,6 +155,13 @@ unpackNum :: LispVal -> Integer
 unpackNum (Number n) = n
 unpackNum (List [n]) = unpackNum n
 
+unpackStr :: LispVal -> String
+unpackStr (String s) = s
+unpackStr (List [n]) = unpackStr n
+
+unpackBool :: LispVal -> Bool
+unpackBool (Bool b) = b
+unpackBool (List [b]) = unpackBool b
 
 main :: IO ()
 main = do
@@ -173,7 +182,11 @@ eval :: Env -> LispVal -> IO LispVal
 eval env val@(String _) = return val
 eval env val@(Number _) = return val
 eval env val@(Bool _) = return val
-eval env (Atom id) = getVar env id
+eval env val@(Atom id) = getVar env id
+eval env (List [Atom "quote", val]) = return val
+
+
+
 eval env (List (function : args)) = do
     func <- eval env function
     argVals <- mapM (eval env) args
@@ -196,14 +209,33 @@ unpackVal v = v >>= getEitherVal
 
 
 primitives :: [(String, [LispVal] -> LispVal)]
-primitives = [("+", binaryFunc (+))
-			 ,("-", binaryFunc (-))
-			 ,("*", binaryFunc (*))
+primitives = [("+", numericBinFunc (+))
+			 ,("-", numericBinFunc (-))
+			 ,("*", numericBinFunc (*))
+             
+             ,("=", numBoolBinFunc (==))
+             ,("<", numBoolBinFunc (<))
+             ,(">", numBoolBinFunc (>))
+             ,("/=", numBoolBinFunc (/=))
+             ,(">=", numBoolBinFunc (>=))
+             ,("<=", numBoolBinFunc (<=))
+             ,("&&", boolBoolBinFunc (&&))
+             ,("||", boolBoolBinFunc (||))
+             
+             
 			 ]
 
 
-binaryFunc :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
-binaryFunc op params = Number $ foldl1 op $ map unpackNum params
+numericBinFunc :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
+numericBinFunc op params = Number $ foldl1 op $ map unpackNum params
+
+numBoolBinFunc = boolBinFunc unpackNum
+strBoolBinFunc = boolBinFunc unpackStr
+boolBoolBinFunc = boolBinFunc unpackBool
+
+boolBinFunc :: (LispVal -> a) -> (a -> a -> Bool) -> [LispVal] -> LispVal
+boolBinFunc unpack func [x, y] = if func (unpack x) (unpack y) then (Atom "#t") else (Atom "#f")
+boolBinFunc _ _ args = (Atom "expression error")
 
 getVar :: Env -> String -> IO LispVal
 getVar env var = do
@@ -214,12 +246,13 @@ getVar env var = do
 
 apply :: LispVal -> [LispVal] -> IO LispVal
 apply (PrimitiveFunc func) args = return (func args)
+apply badVal args = return (Atom "expression error")
 
 evalString :: Env -> String -> IO ()
 evalString env expr = (eval env $ readExpr expr) >>= showVal2
 
 evalExpr :: String -> IO ()
-evalExpr expr = nullEnv >>= (flip evalString expr)
+evalExpr expr = primitiveBindings >>= (flip evalString expr)
 
 bindVars :: Env -> [(String, LispVal)] -> IO Env
 bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
@@ -232,5 +265,21 @@ primitiveBindings :: IO Env
 primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc PrimitiveFunc) primitives)
   where makeFunc constructor (var, func) = (var, constructor func)
 
-makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
+--makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
 
+{-
+type Env = IORef [(String, IORef LispVal)]
+
+| PrimitiveFunc ([LispVal] -> LispVal)
+| Func { 
+      params :: [String]
+    , vararg :: (Maybe String)
+    , body :: [LispVal]
+    , closure :: Env }
+-}                    
+                    
+--globalFunctions :: IO Env
+--globalFunctions = 
+
+testVal :: IO LispVal
+testVal = return (Atom "testVal")
