@@ -11,10 +11,6 @@ import System.IO
 import System.Environment
 import Data.Either
 
---import Text.Parsec.Prim
---import Text.Parsec.Token (commaSep, integer, decimal)
---import Text.ParserCombinators.Parsec
-
 data LispVal = Atom String
              | Number Integer
              | Float Double
@@ -90,18 +86,17 @@ isBool "True" = True
 isBool "False" = True
 isBool _ = False
 
+getNum :: LispVal -> Integer
+getNum (Number n) = n
+getNum (List [n]) = getNum n
 
-unpackNum :: LispVal -> Integer
-unpackNum (Number n) = n
-unpackNum (List [n]) = unpackNum n
+getStr :: LispVal -> String
+getStr (String s) = s
+getStr (List [n]) = getStr n
 
-unpackStr :: LispVal -> String
-unpackStr (String s) = s
-unpackStr (List [n]) = unpackStr n
-
-unpackBool :: LispVal -> Bool
-unpackBool (Bool b) = b
-unpackBool (List [b]) = unpackBool b
+getBool :: LispVal -> Bool
+getBool (Bool b) = b
+getBool (List [b]) = getBool b
 
 eval :: Env -> LispVal -> IO LispVal
 eval env val@(String _) = return val
@@ -120,20 +115,18 @@ eval env (List (Atom "cond" : [])) = return (Error "no clause in cond expression
 eval env (List (Atom "cond" : clauses)) = evalCond env clauses
 eval env (List (Atom "case" : [])) = return (Error "no key and clause in case expression")
 eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
-        
-{-
-eval env (List [Atom "define", Atom var, form]) = 
-    eval env form >>= defineVar env var
+eval env (List [Atom "define", Atom var, form]) = eval env form >>= defineVar env var
+eval env (List (Atom "define": List (Atom var : params): body)) = expandDefine params body >>= defineVar env var
 
-eval env (List (Atom "define": List (Atom var : params): body)) =
 
--}
 
 
 eval env (List (function : args)) = do
     func <- eval env function
     argVals <- mapM (eval env) args
     apply func argVals
+
+eval env unknownForm = return (Error "unknown form")
 
 evalCond :: Env -> [LispVal] -> IO LispVal
 evalCond env ((List [cond, expression]) : clauses) = do  
@@ -192,16 +185,16 @@ primitives = [("+", add)
 			 ]
 
 add :: [LispVal] -> LispVal
-add params = Number $ foldl1 (+) $ map unpackNum params
+add params = Number $ foldl1 (+) $ map getNum params
 
 minus :: [LispVal] -> LispVal
-minus params = Number $ foldl1 (-) $ map unpackNum params
+minus params = Number $ foldl1 (-) $ map getNum params
 
 multi :: [LispVal] -> LispVal
-multi params = Number $ foldl1 (*) $ map unpackNum params
+multi params = Number $ foldl1 (*) $ map getNum params
 
 divide :: [LispVal] -> LispVal
-divide params = Number $ foldl1 (div) $ map unpackNum params
+divide params = Number $ foldl1 (div) $ map getNum params
 
 equal :: [LispVal] -> LispVal
 equal [Number a, Number b] = Bool (a == b)
@@ -271,9 +264,12 @@ getVar env var = do
         Just v -> readIORef v
         _ -> return (List [])
 
---setVar :: Env -> String -> LispVal -> IO LispVal
---setVar env var val = do
---    vars <- readIORef env
+setVar :: Env -> String -> LispVal -> IO LispVal
+setVar env var val = do
+    vars <- readIORef env
+    case (lookup var vars) of 
+        Just v -> do writeIORef v val; return val
+        _ -> return (Error "Set Error")
     
 
 isDefined :: Env -> String -> IO Bool
@@ -283,11 +279,20 @@ isDefined env var = do
         List [] -> return False
         _ -> return True
 
---defineVar :: Env -> String -> LispVal -> LispVal
---defineVar env var val = do
---    defined <- isDefined env var
---    if defined 
---        then
+defineVar :: Env -> String -> LispVal -> IO LispVal
+defineVar env var val = do
+    defined <- isDefined env var
+    if not defined
+        then do 
+            vars <- readIORef env
+            nv <- newIORef val
+            writeIORef env ((var, nv) : vars)
+            return val
+        else setVar env var val
+
+expandDefine :: [LispVal] -> [LispVal] -> IO LispVal
+expandDefine l v = return (Error "NOT FINISHED")
+
 
 apply :: LispVal -> [LispVal] -> IO LispVal
 apply (PrimitiveFunc func) args = return (func args)
@@ -315,3 +320,10 @@ primitiveBindings = (newIORef []) >>= (flip bindVars $ map (makeFunc PrimitiveFu
 --globalFunctions :: IO Env
 --globalFunctions = 
 
+repl :: IO ()
+repl = do
+    env <- primitiveBindings
+    forever $ do
+        putStr "Lisp>>> "
+        l <- getLine
+        evalString env l
