@@ -15,82 +15,30 @@ import Data.Either
 --import Text.Parsec.Token (commaSep, integer, decimal)
 --import Text.ParserCombinators.Parsec
 
-{-
-simple :: Parser Char
-simple = letter
-
-run :: Show a => Parser a -> String -> IO ()
-run p input =
-            case (parse p "" input) of
-              Left err -> do { putStr "parse error at "
-                             ; print err
-                             }
-              Right x -> print x
-
-
-openClose :: Parser Char
-openClose = do {
-				char '('
-			   ;char ')'
-			   }
-
-parens :: Parser ()
-parens = do {
-			  char '('
-			; parens
-			; char ')'
-			; parens
-			}
-		<|> return ()
-
---test = case (parse (commaSep integer) "" "11, 2, 43") of
---		Left err -> print err
---		Right xs -> print (sum xs)
-
---numbers = commaSep integer
--}
-
-
---data IP = IP Word8 Word8 Word8 Word8 deriving Show
-
---parseIP :: Parser IP
---parseIP = do
---  d1 <- decimal
---  char '.'
---  d2 <- decimal
---  char '.'
---  d3 <- decimal
---  char '.'
---  d4 <- decimal
---  return $ IP d1 d2 d3 d4
-
---test = parse parseIP "" "192.168.1.1"
-
---main :: IO ()
---main = print $ parseOnly parseIP "131.45.68.123"
-
-
 data LispVal = Atom String
              | Number Integer
              | Float Double
              | String String
              | Bool Bool
+             | Error String
              | List [LispVal]
              | PrimitiveFunc ([LispVal] -> LispVal)
              | Func { params :: [String]
              		, vararg :: (Maybe String)
              		, body :: [LispVal]
              		, closure :: Env }
-
+               
 type Env = IORef [(String, IORef LispVal)]
-
--- "(define x 10)"
--- "(define (add x y) (+ x y)"
--- ["(","define","(","add","x","y",")","(","+","x","y",")",")"]
--- [Atom "define",List [Atom "add",Atom "x",Atom "y"],List [Atom "+",Atom "x",Atom "y"]]"
 
 tokenize :: String -> [String]
 tokenize exp = words $ replace ")" " ) " $ replace "(" " ( " exp
+
+getExpr :: [String] -> Int -> [String]
+getExpr [] _ = []
+getExpr (x:xs) cnt = case x of 
+    "(" -> x:(getExpr xs (cnt+1))
+    ")" -> if cnt == 1 then [x] else x:(getExpr xs (cnt-1))
+    _   -> x:(getExpr xs cnt)
 
 readExpr :: String -> LispVal
 readExpr = head . readToken . tokenize
@@ -100,13 +48,9 @@ readToken [] = []
 readToken (x:xs) =
 	if x == "(" then
 		let
-			ts1 = takeWhile (/="(") xs
-			ts2 = takeWhile (/=")") xs
-		in if length ts1 > length ts2 then
-			[List (readToken ts2)]++
-			(readToken (drop (length ts2) xs))
-		   else [List (readToken xs)]
-	else if x == ")" then readToken xs
+            se1 = x:(getExpr xs 1)
+            se2 = drop (length se1 - 1) xs
+		in [List (readToken (init $ tail se1))] ++ readToken se2
 	else let val =
 			if (isInteger x) then (Number (read x::Integer))
 			else if (isDouble x) then (Float (read x::Double))
@@ -114,17 +58,16 @@ readToken (x:xs) =
 			 	  	  else (Atom x)
 		 in [val]++readToken xs where
 
-
-
 showVal :: LispVal -> String
 showVal x = case x of
-            (Atom a) 	 -> a ++ " "
-            (Number i) -> show(i) ++ " "
-            (String s) -> s ++ " "
-            (Bool b) 	 -> show(b) ++ " "
-            (Func {params=args, vararg=varargs, body=body, closure=env})   -> "this is a function"
-            (PrimitiveFunc p) -> "this is a primitive function"
-            (List l)   -> "( "++(concat $ map showVal l) ++ ") "
+    (Atom a) -> a ++ " "
+    (Number i) -> show(i) ++ " "
+    (String s) -> s ++ " "
+    (Bool b) -> if b then "#t " else "#f "
+    (Error e) -> "[Error] " ++ e
+    (Func {params=args, vararg=varargs, body=body, closure=env}) -> "this is a function"
+    (PrimitiveFunc p) -> "this is a primitive function"
+    (List l) -> "( "++(concat $ map showVal l) ++ ") "
 
 showVal2 :: LispVal -> IO ()
 showVal2 = putStrLn . showVal
@@ -148,9 +91,6 @@ isBool "False" = True
 isBool _ = False
 
 
---parseLispVal :: String -> LispVal
---parseLispVal x = case x of
-
 unpackNum :: LispVal -> Integer
 unpackNum (Number n) = n
 unpackNum (List [n]) = unpackNum n
@@ -163,18 +103,24 @@ unpackBool :: LispVal -> Bool
 unpackBool (Bool b) = b
 unpackBool (List [b]) = unpackBool b
 
-main :: IO ()
-main = do
-    ref <- newIORef (0 :: Int)
-    modifyIORef ref (+1)
-    readIORef ref >>= print
-
 eval :: Env -> LispVal -> IO LispVal
 eval env val@(String _) = return val
 eval env val@(Number _) = return val
 eval env val@(Bool _) = return val
 eval env val@(Atom id) = getVar env id
 eval env (List [Atom "quote", val]) = return val
+eval env (List [Atom "if", expr, branch1, branch2]) = do
+    res <- eval env expr
+    case res of 
+        Bool True -> eval env branch1
+        Bool False -> eval env branch2
+        _ -> return (Error "in if expression")
+
+eval env (List (Atom "cond" : [])) = return (Error "no clause in cond expression")
+eval env (List (Atom "cond" : clauses)) = evalCond env clauses
+eval env (List (Atom "case" : [])) = return (Error "no key and clause in case expression")
+eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
+        
 {-
 eval env (List [Atom "define", Atom var, form]) = 
     eval env form >>= defineVar env var
@@ -189,6 +135,31 @@ eval env (List (function : args)) = do
     argVals <- mapM (eval env) args
     apply func argVals
 
+evalCond :: Env -> [LispVal] -> IO LispVal
+evalCond env ((List [cond, expression]) : clauses) = do  
+    case cond of 
+        Atom "else" -> eval env expression
+        _ -> do res <- eval env cond
+                case res of 
+                    Bool True -> eval env expression
+                    Bool False -> evalCond env clauses
+                    _ -> return (Error "in cond expression")
+evalCond env _ = return (Error "in cond expression")
+
+evalCase :: Env -> LispVal -> [LispVal] -> IO LispVal
+evalCase env key ((List ((List vals) : expression)) : clauses) = do
+    k <- eval env key
+    -- key must be an expression. each <case clause> must have one of the following forms:
+    -- ((<datum1> ...) <expression1> <expression2> ...)
+    -- (else <expression1> <expression2> ...)
+    case (any compVal $ map (\x -> equal [x, k]) vals) of
+        True -> last $ fmap (eval env) expression
+        False -> evalCase env key clauses
+    where 
+        compVal (Bool True) = True
+        compVal _ = False
+evalCase env _ [List (Atom "else" : expression)] = last $ fmap (eval env) expression
+evalCase _ _ [] = return (Error "in case expression")
 
 getEitherVal :: Either a b -> IO String
 getEitherVal e = case e of
@@ -198,23 +169,20 @@ getEitherVal e = case e of
 packVal :: a -> IO a
 packVal a = return a
 
-unpackVal :: IO (Either a b) -> IO String
-unpackVal v = v >>= getEitherVal
-
 
 primitives :: [(String, [LispVal] -> LispVal)]
-primitives = [("+", numericBinFunc (+))
-			 ,("-", numericBinFunc (-))
-			 ,("*", numericBinFunc (*))
-             
-             ,("=", numBoolBinFunc (==))
-             ,("<", numBoolBinFunc (<))
-             ,(">", numBoolBinFunc (>))
-             ,("/=", numBoolBinFunc (/=))
-             ,(">=", numBoolBinFunc (>=))
-             ,("<=", numBoolBinFunc (<=))
-             ,("&&", boolBoolBinFunc (&&))
-             ,("||", boolBoolBinFunc (||))
+primitives = [("+", add)
+			 ,("-", minus)
+			 ,("*", multi)
+             ,("/", divide)
+             ,("=", equal)
+             ,("<", less)
+             ,(">", great)
+             ,("/=", notEqual)
+             ,(">=", greatEqual)
+             ,("<=", lessEqual)
+             ,("&&", and2)
+             ,("||", or2)
              
              ,("car", car)
              ,("cdr", cdr)
@@ -223,36 +191,78 @@ primitives = [("+", numericBinFunc (+))
              ,("length", len)
 			 ]
 
+add :: [LispVal] -> LispVal
+add params = Number $ foldl1 (+) $ map unpackNum params
 
-numericBinFunc :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
-numericBinFunc op params = Number $ foldl1 op $ map unpackNum params
+minus :: [LispVal] -> LispVal
+minus params = Number $ foldl1 (-) $ map unpackNum params
 
-numBoolBinFunc = boolBinFunc unpackNum
-strBoolBinFunc = boolBinFunc unpackStr
-boolBoolBinFunc = boolBinFunc unpackBool
+multi :: [LispVal] -> LispVal
+multi params = Number $ foldl1 (*) $ map unpackNum params
 
-boolBinFunc :: (LispVal -> a) -> (a -> a -> Bool) -> [LispVal] -> LispVal
-boolBinFunc unpack func [x, y] = if func (unpack x) (unpack y) then (Atom "#t") else (Atom "#f")
-boolBinFunc _ _ args = (Atom "expression error")
+divide :: [LispVal] -> LispVal
+divide params = Number $ foldl1 (div) $ map unpackNum params
+
+equal :: [LispVal] -> LispVal
+equal [Number a, Number b] = Bool (a == b)
+equal [Atom a, Atom b] = Bool (a == b)
+equal [String a, String b] = Bool (a == b)
+equal [Bool a, Bool b] = Bool (a == b)
+equal [List a, List b]
+    | length a /= length b = Bool False
+    | otherwise = Bool $ all compPair $ zip a b
+      where compPair (a, b) = case (equal [a, b]) of
+                                Bool True -> True
+                                _ -> False
+equal _ = (Error "wrong paramters for =")
+
+notEqual :: [LispVal] -> LispVal
+notEqual vals = case equal vals of 
+    Bool True -> Bool False
+    Bool False -> Bool True
+    _ -> (Error "wrong paramters for not")
+
+great :: [LispVal] -> LispVal
+great [Number a, Number b] = Bool (a > b)
+great _ = (Error "wrong paramters for >")
+
+less :: [LispVal] -> LispVal
+less [Number a, Number b] = Bool (a < b)
+less _ = (Error "wrong paramters for <")
+
+greatEqual :: [LispVal] -> LispVal
+greatEqual [Number a, Number b] = Bool (a >= b)
+greatEqual _ = (Error "wrong paramters for >=")
+
+lessEqual :: [LispVal] -> LispVal
+lessEqual [Number a, Number b] = Bool (a <= b)
+lessEqual _ = (Error "wrong paramters for <=")
+
+and2 :: [LispVal] -> LispVal
+and2 [Bool b1, Bool b2] = Bool (b1 == b2)
+and2 _ = (Error "wrong paramters for &&")
+
+or2 :: [LispVal] -> LispVal
+or2 [Bool b1, Bool b2] = Bool (b1 || b2)
+or2 _ = (Error "wrong paramters for ||")
 
 car :: [LispVal] -> LispVal
 car [List (x:xs)] = x
-car _ = List []
+car _ = (Error "wrong paramters for car")
 
 cdr :: [LispVal] -> LispVal
 cdr [List (x:xs)] = List xs
-cdr _ = List []
+cdr _ = (Error "wrong paramters for cdr")
 
 cons :: [LispVal] -> LispVal
-cons x = List x
+cons = List
 
 list :: [LispVal] -> LispVal
 list = List
 
 len :: [LispVal] -> LispVal
 len [List x] = Number (toInteger (length x))
-len _ = Number 0
-
+len _ = (Error "wrong paramters for length")
 
 getVar :: Env -> String -> IO LispVal
 getVar env var = do
@@ -281,7 +291,7 @@ isDefined env var = do
 
 apply :: LispVal -> [LispVal] -> IO LispVal
 apply (PrimitiveFunc func) args = return (func args)
-apply badVal args = return (Atom "expression error")
+apply badVal args = return (Error "expression error")
 
 evalString :: Env -> String -> IO ()
 evalString env expr = (eval env $ readExpr expr) >>= showVal2
@@ -301,17 +311,6 @@ primitiveBindings = (newIORef []) >>= (flip bindVars $ map (makeFunc PrimitiveFu
   where makeFunc constructor (var, func) = (var, constructor func)
 
 --makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
-
-{-
-type Env = IORef [(String, IORef LispVal)]
-
-| PrimitiveFunc ([LispVal] -> LispVal)
-| Func { 
-      params :: [String]
-    , vararg :: (Maybe String)
-    , body :: [LispVal]
-    , closure :: Env }
--}                    
                     
 --globalFunctions :: IO Env
 --globalFunctions = 
