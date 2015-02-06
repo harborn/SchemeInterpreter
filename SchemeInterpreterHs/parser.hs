@@ -104,11 +104,11 @@ eval env val@(Number _) = return val
 eval env val@(Bool _) = return val
 eval env val@(Atom id) = getVar env id
 eval env (List [Atom "quote", val]) = return val
-eval env (List [Atom "if", expr, branch1, branch2]) = do
+eval env (List [Atom "if", expr, consequent, alternate]) = do
     res <- eval env expr
     case res of 
-        Bool True -> eval env branch1
-        Bool False -> eval env branch2
+        Bool True -> eval env consequent
+        Bool False -> eval env alternate
         _ -> return (Error "in if expression")
 
 eval env (List (Atom "cond" : [])) = return (Error "no clause in cond expression")
@@ -116,11 +116,8 @@ eval env (List (Atom "cond" : clauses)) = evalCond env clauses
 eval env (List (Atom "case" : [])) = return (Error "no key and clause in case expression")
 eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
 eval env (List [Atom "define", Atom var, form]) = eval env form >>= defineVar env var
-eval env (List (Atom "define": List (Atom var : params): body)) = expandDefine params body >>= defineVar env var
-
-
-
-
+eval env (List (Atom "define": List (Atom var : formals): body)) = expandDefine formals body >>= defineVar env var
+eval env (List (Atom "lambda": formals: body)) = 
 eval env (List (function : args)) = do
     func <- eval env function
     argVals <- mapM (eval env) args
@@ -291,7 +288,7 @@ defineVar env var val = do
         else setVar env var val
 
 expandDefine :: [LispVal] -> [LispVal] -> IO LispVal
-expandDefine l v = return (Error "NOT FINISHED")
+expandDefine formals body = return (Error "NOT FINISHED")
 
 
 apply :: LispVal -> [LispVal] -> IO LispVal
@@ -316,7 +313,6 @@ primitiveBindings = (newIORef []) >>= (flip bindVars $ map (makeFunc PrimitiveFu
   where makeFunc constructor (var, func) = (var, constructor func)
 
 --makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
-                    
 --globalFunctions :: IO Env
 --globalFunctions = 
 
@@ -324,6 +320,6 @@ repl :: IO ()
 repl = do
     env <- primitiveBindings
     forever $ do
-        putStr "Lisp>>> "
+        putStr "Scheme>>> "
         l <- getLine
         evalString env l
