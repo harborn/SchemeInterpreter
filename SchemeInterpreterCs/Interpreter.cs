@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
@@ -11,16 +13,7 @@ using System.Threading.Tasks;
 namespace SchemeInterpreterCs
 {
 
-    class Value
-    {
-        public string Val;
-        public Value(string val)
-        {
-            this.Val = val;
-        }
-    }
 
-    [Serializable]
     class Interpreter
     {
 
@@ -31,46 +24,63 @@ namespace SchemeInterpreterCs
             else return Fib(n1 - 1, f1 + f2, f1);
         }
 
+
         static void Main(string[] args)
         {
+
 
             Interpreter ip = new Interpreter();
 
             string[] expr = {
-                //"(define q '())",
-                //"(define q2 '1)",
-                //"(define d3 'what)",
-                //"(define q4 '(ajfiodpsafe))",
-                //"q",
-                //"q2",
-                //"q3",
-                //"q4",
+                "(define q '())",
+                "(define q2 '1)",
+                "(define q3 'what)",
+                "(define q4 '(ajfiodpsafe))",
+                "q",
+                "q2",
+                "q3",
+                "q4",
 
-                //"(define x 3)",
-                //"(define y (define x 4) x)",
-                //"x",
-                //"y",
-                //"(define testfoo (lambda (x y) (define add3 (lambda x (+ x 3))) (+ (add3 x) y)))",
-                //"(testfoo 3 4)",
-                //"(+ x y)",
+                "(define x 3)",
+                "(define y (define x 4) x)",
+                "x",
+                "y",
+                "(define testfoo (lambda (x y) (define add3 (lambda x (+ x 3))) (+ (add3 x) y)))",
+                "(testfoo 3 4)",
+                "(+ x y)",
                 "((lambda (x y) (+ x y)) (+ 5 7) 6)",
-                //"(+ 3 4)",
+                "(+ 3 4)",
                 "(+ 3 4 (+ 3 4) (* 3 4) (/ 4 3))",
-                //"(define (add x y) (+ x y))",
-                //"(add 3 4)",
-                //"(define add (lambda (x y) (+ x y)))",
+                "(define (add x y) (+ x y))",
+                "(add 3 4)",
+                "(define add (lambda (x y) (+ x y)))",
                 "(define fib (lambda (n) (if (<= n 1) n (+ (fib (- n 1)) (fib (- n 2))))))",
-                //"(fib 5)",
+                "(fib 5)",
                 "(define (fib-kernel n1 n2 f1 f2) (if (< n1 n2) (fib-kernel (+ n1 1) n2 (+ f1 f2) f1) f2))",
                 "(fib-kernel 0 10 1 0)",
-                //"(define (fib n) (define (fib-kernel n1 n2 f1 f2) (if (< n1 n2) (fib-kernel (+ n1 1) n2 (+ f1 f2) f1) f2)) (fib-kernel 0 n 1 0))",
-                "(fib 5)",
+                "(define (fib2 n) (define (fib-kernel n1 n2 f1 f2) (if (< n1 n2) (fib-kernel (+ n1 1) n2 (+ f1 f2) f1) f2)) (fib-kernel 0 n 1 0))",
+                "(fib2 200)",
+                //"(define add1 (lambda (x y) (+ x y)))",
+                //"(define add2 (lambda (x y) (+ x y)))",
+                //"(define add3 (lambda (x y) (+ x y)))",
+                //"(define adds (list add1 add2 add3))",
+                //"(define div1 /)",
+                //"(define div2 /)",
+                //"(define div3 /)",
+                //"(define divs (list div1 div2 div3))",
+                //"(define list1 '(1 2 3))",
+                //"(define list2 '(4 5 6))",
+                //"(define list3 '(7 8 9))",
+                //"(define lists '(list1 list2 list3))",
+                "(define list1 (list 1 2 3))",
+                "(define list2 (list 4 5 6))",
+                "(define list3 (list 7 8 9))",
+                "(define lists (list list1 list2 list3))"
             };
 
             for (int i = 0; i < expr.Length; i++)
             {
-                Console.Write(expr[i]);
-                Console.Write(" ------>     ");
+                Console.Write(expr[i] + "  ------->  ");
                 ip.EvalString(expr[i]);
                 Console.WriteLine();
             }
@@ -92,9 +102,8 @@ namespace SchemeInterpreterCs
 
         private Closure globalClosure;
 
-        internal enum CellType { Atom, Number, List, Primitive, Lambda, Error };
-        [Serializable]
-        internal class Cell : ICloneable
+        private enum CellType { Atom, Number, List, Primitive, Lambda, Error };
+        private class Cell
         {
             public CellType Type = CellType.Atom;
             public String Val = null;
@@ -124,21 +133,9 @@ namespace SchemeInterpreterCs
                 this.Type = CellType.Primitive;
                 this.Prim = f;
             }
-
-            public object Clone()
-            {
-                using (Stream objectStream = new MemoryStream())
-                {
-                    IFormatter formatter = new BinaryFormatter();
-                    formatter.Serialize(objectStream, this);
-                    objectStream.Seek(0, SeekOrigin.Begin);
-                    return formatter.Deserialize(objectStream) as Cell;
-                }
-            }
         }
 
-        [Serializable]
-        public class Closure : ICloneable
+        private class Closure
         {
             private Dictionary<string, Cell> Env;
             public Closure Outer;
@@ -163,17 +160,6 @@ namespace SchemeInterpreterCs
                         this.Env[var] = value;
                     else
                         this.Env.Add(var, value);
-                }
-            }
-
-            public object Clone()
-            {
-                using (Stream objectStream = new MemoryStream())
-                {
-                    IFormatter formatter = new BinaryFormatter();
-                    formatter.Serialize(objectStream, this);
-                    objectStream.Seek(0, SeekOrigin.Begin);
-                    return formatter.Deserialize(objectStream) as Closure;
                 }
             }
         }
@@ -268,14 +254,17 @@ namespace SchemeInterpreterCs
             }
             else if (cell.Type == CellType.Number)
             {
-                //return cell;
-                return new Cell(cell.Type, cell.Val);
+                return new Cell(CellType.Number, cell.Val); // cell;
             }
             else if (cell.Type == CellType.Error)
             {
                 return cell;
             }
             else if (cell.Type == CellType.Primitive)
+            {
+                return cell;
+            }
+            else if (cell.Type == CellType.Lambda)
             {
                 return cell;
             }
@@ -300,40 +289,27 @@ namespace SchemeInterpreterCs
                     Cell vars = v0.List[0];
                     Cell body = v0.List.Last();
 
-                    Closure clo, pre;
-
-                    if (v0.Clo == null)
-                    {
-                        clo = new Closure();
-                        clo.Outer = closure;
-                        pre = closure;
-                    }
-                    else
-                    {
-                        clo = v0.Clo.Clone() as Closure;
-                        //clo = v0.Clo;
-                        pre = v0.Clo;
-                    }
+                    Closure clo;
+                    clo = new Closure();
+                    clo.Outer = closure;
 
                     if (vars.List.Count != cell.List.Count - 1)
                         return new Cell(CellType.Error, "lambda arguments expect " + vars.List.Count);
 
-                    List<Cell> args = new List<Cell>();
-                    for (int i = 1; i < cell.List.Count; i++)
-                    {
-                        args.Add(Eval(cell.List[i], pre));
-                    }
-
                     for (int i = 0; i < vars.List.Count; i++)
-                    {
-                        clo[vars.List[i].Val] = args[i];
-                        //clo[vars.List[i].Val] = Eval(cell.List[i + 1], pre);
-                    }
+                        clo[vars.List[i].Val] = Eval(cell.List[i + 1], closure);
 
                     for (int i = 1; i < v0.List.Count - 1; i++)
                         Eval(v0.List[i], clo);
 
                     return Eval(body, clo);
+                }
+                else if (v0.Type == CellType.Number) // (0 1 2)
+                {
+                    Cell ret = new Cell(CellType.List);
+                    foreach (Cell c in cell.List)
+                        ret.List.Add(Eval(c, closure));
+                    return ret;
                 }
                 else if (c0.Type == CellType.Atom)
                 {
@@ -491,7 +467,8 @@ namespace SchemeInterpreterCs
             clo["cdr"] = new Cell(FuncCdr);
             clo["length"] = new Cell(FuncLength);
             clo["list"] = new Cell(FuncList);
-
+            clo["null?"] = new Cell(FuncIsNull);
+            clo["list?"] = new Cell(FuncIsList);
 
             return clo;
         }
@@ -567,7 +544,7 @@ namespace SchemeInterpreterCs
         private Cell FuncCar(List<Cell> cl)
         {
             if (cl == null || cl[0].List == null || cl[0].List.Count == 0) return new Cell(CellType.Error, "null list for car");
-            return cl[0].List[0].Clone() as Cell;
+            return Eval(cl[0].List[0], cl[0].List[0].Clo);
         }
 
         private Cell FuncCdr(List<Cell> cl)
@@ -577,7 +554,7 @@ namespace SchemeInterpreterCs
             {
                 Cell ret = new Cell(CellType.List);
                 for (int i = 1; i < cl[0].List.Count; i++)
-                    ret.List.Add(cl[0].List[i].Clone() as Cell);
+                    ret.List.Add(Eval(cl[0].List[i], cl[0].List[i].Clo));
                 return ret;
             }
             return new Cell(CellType.List);
@@ -594,13 +571,25 @@ namespace SchemeInterpreterCs
             Cell ret = new Cell(CellType.List);
             foreach (Cell c in cl)
             {
-                ret.List.Add(new Cell(CellType.Atom, c.Val.Clone() as string));
+                ret.List.Add(Eval(c, c.Clo));
             }
             return ret;
         }
 
+        private Cell FuncIsNull(List<Cell> cl)
+        {
+            if (cl == null || cl[0].List == null) return new Cell(CellType.Error, "null list for null?");
+            if (cl[0].Type != CellType.List) return new Cell(CellType.Error, "parameter for null? is not list");
+            if (cl[0].List.Count == 0) return globalClosure["#f"];
+            return globalClosure["#t"];
+        }
 
-
+        private Cell FuncIsList(List<Cell> cl)
+        {
+            if (cl == null || cl[0].List == null ) return new Cell(CellType.Error, "parameter for list? is wrong");
+            if (cl[0].Type != CellType.List) return globalClosure["#f"];
+            return globalClosure["#t"];
+        }
 
     }
 }
