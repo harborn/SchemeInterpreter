@@ -14,4 +14,6 @@ run p input =
               Right x -> print x
               
 main :: IO ()
-main = print 0
+main = do
+    input <- getArgs
+    
